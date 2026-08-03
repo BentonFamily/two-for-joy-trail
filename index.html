@@ -2,6 +2,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Two for Joy Trail</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
@@ -636,8 +637,16 @@ async function renderOrg() {
   let rows = '';
   TEAMS.forEach((team, i) => {
     const progress = allProgress[i];
+    let whereNow;
+    if (progress.solved) {
+      whereNow = 'Solved';
+    } else if (progress.stopIndex >= 10) {
+      whereNow = 'Unscrambling';
+    } else {
+      whereNow = 'Station ' + team.route[progress.stopIndex];
+    }
     rows += `<tr>
-      <td>${team.name}</td><td>${team.kind}</td><td>${progress.stopIndex}/10</td>
+      <td>${team.name}</td><td>${team.kind}</td><td>${whereNow}</td><td>${progress.stopIndex}/10</td>
       <td>${progress.collected.length}/${team.wordLength}</td><td>${progress.solved ? team.target : '-'}</td>
     </tr>`;
   });
@@ -649,7 +658,7 @@ async function renderOrg() {
       <div class="msg" id="connectionMsg"></div>
     </div>
     <button class="secondary" onclick="renderOrg()">Refresh</button>
-    <table><tr><th>Team</th><th>Type</th><th>Stations</th><th>Letters</th><th>Word</th></tr>${rows}</table>`;
+    <table><tr><th>Team</th><th>Type</th><th>Where now</th><th>Stations</th><th>Letters</th><th>Word</th></tr>${rows}</table>`;
 
   html += `<h2>Answer key (editable)</h2>
     <div class="card">
