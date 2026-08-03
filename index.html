@@ -85,7 +85,7 @@
   <div id="orgContent" style="display:none;"></div>
 </div>
 
-<div class="note">Prototype only. Station passcodes, the organiser passcode, and hint text are placeholders, replace before the day. Real what3words address and digit order live in Organiser settings. This file should be hosted on GitHub Pages (or similar), not opened as a local file, for the Google Sheet backend to work.</div>
+<div class="note">Prototype only. Station passcodes, the organiser passcode, and hint text are placeholders, replace before the day. Real what3words address and digit order live in Organiser settings. Before this will work, set FIREBASE_DB_URL near the top of the script to your Firebase Realtime Database URL.</div>
 
 <script>
 const ORG_PASSCODE = "MAGPIE2026"; // change this before the day
@@ -160,11 +160,11 @@ const TEAMS = TEAMS_RAW.map((team, teamIndex) => {
 
 function slug(s) { return s.toLowerCase().replace(/\s+/g, '-'); }
 
-// ---- Backend: your Apps Script Web App URL (the same one as before) ----
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqo7hSxN2UzjUeF7K7-Zly2HnNzvrIZJfQufx8nCDKlAkwD8vHi_VEpK3V3XRGYfOl/exec";
+// ---- Backend: your Firebase Realtime Database URL goes here ----
+const FIREBASE_DB_URL = "https://two-for-joy-trail-default-rtdb.europe-west1.firebasedatabase.app/";
 
-// Generic storage backed by a Google Sheet via Apps Script, with a local
-// in-memory cache as a same-session safety net if a call ever fails.
+// Generic storage backed by Firebase Realtime Database's REST API, with a
+// local in-memory cache as a same-session safety net if a call ever fails.
 const memoryFallback = {};
 let sawStorageFailure = false;
 
@@ -173,47 +173,40 @@ function showFallbackBanner(text) {
   if (el) { el.style.display = 'block'; el.textContent = text; }
 }
 
+function firebasePath(key) {
+  return FIREBASE_DB_URL.replace(/\/$/, '') + '/' + encodeURIComponent(key) + '.json';
+}
+
 async function backendGet(key) {
-  const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
-  const res = await fetch(url, { credentials: 'include' });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.value; // string or null
+  const res = await fetch(firebasePath(key));
+  if (!res.ok) throw new Error('Firebase GET failed: ' + res.status);
+  return await res.json(); // the stored value directly, or null if not present
 }
 
 async function backendSet(key, value) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight
-    body: JSON.stringify({ action: 'set', key: key, value: value })
+  const res = await fetch(firebasePath(key), {
+    method: 'PUT',
+    body: JSON.stringify(value)
   });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return !!data.success;
+  if (!res.ok) throw new Error('Firebase PUT failed: ' + res.status);
+  return true;
 }
 
 async function backendDelete(key) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'delete', key: key })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return !!data.success;
+  const res = await fetch(firebasePath(key), { method: 'DELETE' });
+  if (!res.ok) throw new Error('Firebase DELETE failed: ' + res.status);
+  return true;
 }
 
 async function storeGet(key, fallbackValue) {
   try {
-    const raw = await backendGet(key);
-    if (raw === null || raw === undefined || raw === '') return fallbackValue;
-    memoryFallback[key] = JSON.parse(raw);
-    return memoryFallback[key];
+    const val = await backendGet(key);
+    if (val === null || val === undefined) return fallbackValue;
+    memoryFallback[key] = val;
+    return val;
   } catch (e) {
     console.error('Backend get failed for', key, e);
-    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Google Sheet backend, running on temporary memory for this session. Check the Apps Script URL and that this page is hosted on GitHub Pages (not opened as a local file)."); }
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Firebase backend, running on temporary memory for this session. Check the Database URL and that the rules allow read/write."); }
     return memoryFallback[key] !== undefined ? memoryFallback[key] : fallbackValue;
   }
 }
@@ -221,12 +214,11 @@ async function storeGet(key, fallbackValue) {
 async function storeSet(key, value) {
   memoryFallback[key] = value;
   try {
-    const ok = await backendSet(key, JSON.stringify(value));
-    if (!ok) throw new Error('backend set returned false');
+    await backendSet(key, value);
     return true;
   } catch (e) {
     console.error('Backend set failed for', key, e);
-    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Google Sheet backend, running on temporary memory for this session. Check the Apps Script URL and that this page is hosted on GitHub Pages (not opened as a local file)."); }
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Firebase backend, running on temporary memory for this session. Check the Database URL and that the rules allow read/write."); }
     return true; // local cache still holds the value so the UI can proceed
   }
 }
@@ -245,14 +237,12 @@ async function testBackendConnection() {
   msgEl.className = 'msg';
   msgEl.textContent = 'Testing...';
   try {
-    const res = await fetch(APPS_SCRIPT_URL + '?key=__ping__', { credentials: 'include' });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    await backendGet('__ping__');
     msgEl.className = 'msg ok';
-    msgEl.textContent = 'Connected to the Google Sheet backend.';
+    msgEl.textContent = 'Connected to the Firebase backend.';
   } catch (e) {
     msgEl.className = 'msg error';
-    msgEl.textContent = 'Could not connect: ' + e.message + '. Check the Apps Script URL and that it is deployed with access set to Anyone.';
+    msgEl.textContent = 'Could not connect: ' + e.message + '. Check the Database URL and that the rules allow read/write.';
   }
 }
 
@@ -632,7 +622,7 @@ async function renderOrg() {
 
   let html = `<h2>All teams</h2>
     <div class="card">
-      <p class="sub">Backend: Google Sheet via Apps Script</p>
+      <p class="sub">Backend: Firebase Realtime Database</p>
       <button class="secondary" onclick="testBackendConnection()">Test connection</button>
       <div class="msg" id="connectionMsg"></div>
     </div>
