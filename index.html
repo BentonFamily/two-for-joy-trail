@@ -97,17 +97,31 @@ const ORG_PASSCODE = "MAGPIE2026"; // change this before the day
 
 // ---- Config: 10 physical stations, same challenge for every team ----
 const STATIONS = [
-  { id: 1, title: "Three legged race", passcode: "SCARF" },
-  { id: 2, title: "Wedding day laugh", passcode: "LAUGH" },
-  { id: 3, title: "Riddle to next spot", passcode: "OAK" },
-  { id: 4, title: "Tallest tower", passcode: "TOWER" },
-  { id: 5, title: "How they met", passcode: "MARKET" },
-  { id: 6, title: "Cipher word", passcode: "NEST" },
-  { id: 7, title: "Mime the clue", passcode: "MIME" },
-  { id: 8, title: "Wishes for the couple", passcode: "WISH" },
-  { id: 9, title: "Spot the difference", passcode: "SWAP" },
-  { id: 10, title: "Magpie group photo", passcode: "MAGPIE" },
+  { id: 1, title: "Three legged race", prompt: "Enter your race time (e.g. 0:42)", validation: { type: "number" } },
+  { id: 2, title: "Wedding day laugh", prompt: "Type one word from the story you heard", validation: { type: "text" } },
+  { id: 3, title: "The First Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "OAK" } },
+  { id: 4, title: "Tallest tower", prompt: "How many pieces did you use? Enter the number", validation: { type: "number" } },
+  { id: 5, title: "How they met", prompt: "Type one word from the story you heard", validation: { type: "text" } },
+  { id: 6, title: "The Second Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "NEST" } },
+  { id: 7, title: "Mime the clue", prompt: "How many guesses did it take? Enter the number", validation: { type: "number" } },
+  { id: 8, title: "Wishes for the couple", prompt: "Type one word from your favourite wish", validation: { type: "text" } },
+  { id: 9, title: "Spot the difference", prompt: "Type one word describing what changed", validation: { type: "text" } },
+  { id: 10, title: "Magpie group photo", prompt: "Type how many people are in your photo", validation: { type: "number" } },
 ];
+
+function validateAnswer(station, rawVal) {
+  const val = (rawVal || '').trim();
+  if (station.validation.type === 'exact') {
+    return val.toUpperCase() === station.validation.answer;
+  }
+  if (station.validation.type === 'number') {
+    return /\d/.test(val);
+  }
+  if (station.validation.type === 'text') {
+    return val.length >= 2;
+  }
+  return false;
+}
 
 // ---- Config: 7 teams. 3 build what3words words, 4 build digit-words for a 4 digit code ----
 const TEAMS_RAW = [
@@ -368,7 +382,7 @@ async function renderTeam() {
     const station = STATIONS.find(s => s.id === stationNum);
     html += `<div class="card">
       <div><span class="station-num">${stationNum}</span> <strong>${station.title}</strong></div>
-      <input type="text" id="stationInput" placeholder="Enter passcode from this task">
+      <input type="text" id="stationInput" placeholder="${station.prompt}">
       <button onclick="submitStation(${stationNum})">Submit</button>
       <button class="test" onclick="testFillStation(${stationNum})">Test: fill correct answer</button>
       <div class="msg" id="stationMsg"></div>
@@ -387,7 +401,10 @@ let submitInFlight = false;
 
 function testFillStation(stationNum) {
   const station = STATIONS.find(s => s.id === stationNum);
-  document.getElementById('stationInput').value = station.passcode;
+  const dummy = station.validation.type === 'exact' ? station.validation.answer
+    : station.validation.type === 'number' ? '42'
+    : 'test';
+  document.getElementById('stationInput').value = dummy;
   submitStation(stationNum);
 }
 function testFillUnscramble() {
@@ -424,11 +441,11 @@ async function submitStation(stationNum) {
     const station = STATIONS.find(s => s.id === stationNum);
     const input = document.getElementById('stationInput');
     const msgEl = document.getElementById('stationMsg');
-    const val = (input.value || '').trim().toUpperCase();
+    const val = input.value || '';
 
-    if (val !== station.passcode) {
+    if (!validateAnswer(station, val)) {
       msgEl.className = 'msg error';
-      msgEl.textContent = 'Not quite, try again.';
+      msgEl.textContent = station.validation.type === 'exact' ? 'Not quite, try again.' : 'Please enter an answer to continue.';
       return;
     }
 
