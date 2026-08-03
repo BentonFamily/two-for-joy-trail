@@ -483,15 +483,18 @@ async function renderCombine() {
   const container = document.getElementById('combineContent');
   container.innerHTML = '<p>Loading...</p>';
 
-  const settings = await getSettings();
-  const combineState = await getCombineState();
+  const [settings, combineState, allProgress] = await Promise.all([
+    getSettings(),
+    getCombineState(),
+    Promise.all(TEAMS.map(team => getProgress(team.name)))
+  ]);
   const wordTeams = [];
   const numberTeams = [];
-  for (const team of TEAMS) {
-    const progress = await getProgress(team.name);
+  TEAMS.forEach((team, i) => {
+    const progress = allProgress[i];
     if (team.kind === 'word') wordTeams.push({ team, progress });
     else numberTeams.push({ team, progress });
-  }
+  });
   const solvedWords = wordTeams.filter(w => w.progress.solved);
   const solvedNumbers = numberTeams.filter(n => n.progress.solved);
 
@@ -610,16 +613,20 @@ async function checkDigitOrder() {
 async function renderOrg() {
   const container = document.getElementById('orgContent');
   container.innerHTML = '<p>Loading...</p>';
-  const settings = await getSettings();
+
+  const [settings, allProgress] = await Promise.all([
+    getSettings(),
+    Promise.all(TEAMS.map(team => getProgress(team.name)))
+  ]);
 
   let rows = '';
-  for (const team of TEAMS) {
-    const progress = await getProgress(team.name);
+  TEAMS.forEach((team, i) => {
+    const progress = allProgress[i];
     rows += `<tr>
       <td>${team.name}</td><td>${team.kind}</td><td>${progress.stopIndex}/10</td>
       <td>${progress.collected.length}/${team.wordLength}</td><td>${progress.solved ? team.target : '-'}</td>
     </tr>`;
-  }
+  });
 
   let html = `<h2>All teams</h2>
     <div class="card">
