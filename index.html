@@ -175,7 +175,7 @@ function showFallbackBanner(text) {
 
 async function backendGet(key) {
   const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: 'include' });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data.value; // string or null
@@ -184,6 +184,7 @@ async function backendGet(key) {
 async function backendSet(key, value) {
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight
     body: JSON.stringify({ action: 'set', key: key, value: value })
   });
@@ -195,6 +196,7 @@ async function backendSet(key, value) {
 async function backendDelete(key) {
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'delete', key: key })
   });
@@ -243,7 +245,7 @@ async function testBackendConnection() {
   msgEl.className = 'msg';
   msgEl.textContent = 'Testing...';
   try {
-    const res = await fetch(APPS_SCRIPT_URL + '?key=__ping__');
+    const res = await fetch(APPS_SCRIPT_URL + '?key=__ping__', { credentials: 'include' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     msgEl.className = 'msg ok';
