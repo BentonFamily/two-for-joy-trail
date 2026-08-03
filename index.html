@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<title>Two for Joy Trail</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #faf7f2;
+    color: #22221f;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin: 20px 0 8px; }
+  p.sub { color: #666; font-size: 13px; margin-top: 0; }
+  select, button, input {
+    font-size: 15px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  button { background: #22221f; color: #fff; border: none; cursor: pointer; }
+  button.secondary { background: #fff; color: #22221f; border: 1px solid #999; }
+  button.test { background: #fff; color: #8a6d00; border: 1px dashed #d4b106; font-size: 12px; padding: 6px 8px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin-bottom: 12px; background: #fff; }
+  .card.done { background: #eef7ee; border-color: #a8d5a8; }
+  .card.locked { background: #fdf0f0; border-color: #e0b4b4; }
+  .station-num {
+    display: inline-block; background: #22221f; color: #fff; border-radius: 50%;
+    width: 28px; height: 28px; text-align: center; line-height: 28px; font-weight: 600; margin-right: 6px;
+  }
+  .letter-tile {
+    display: inline-block; background: #22221f; color: #fff; padding: 4px 10px;
+    border-radius: 4px; font-size: 16px; margin: 2px; font-weight: 600;
+  }
+  .msg { font-size: 13px; margin-top: 4px; }
+  .msg.error { color: #b3261e; }
+  .msg.ok { color: #2e7d32; }
+  .progress { background: #eee; border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 12px; }
+  .progress-bar { background: #22221f; height: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 4px 5px; border-bottom: 1px solid #eee; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tabs button { width: auto; flex: 1; font-size: 13px; }
+  .note { font-size: 12px; color: #888; border-top: 1px solid #eee; margin-top: 20px; padding-top: 10px; }
+  .hint { font-size: 12px; color: #666; font-style: italic; margin-top: 4px; }
+  a.reveal-link { color: #1a5fb4; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Two for Joy Trail</h1>
+<p class="sub">Prototype. 10 stations, 7 teams, ordering solved in-app before the box location is known.</p>
+
+<div id="storageBanner" style="display:none; background:#fff3cd; color:#664d03; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
+
+<div class="tabs">
+  <button id="tabTeam" onclick="setTab('team')">Team view</button>
+  <button id="tabCombine" class="secondary" onclick="setTab('combine')">Combine</button>
+  <button id="tabOrg" class="secondary" onclick="setTab('org')">Organiser</button>
+</div>
+
+<div id="teamView">
+  <h2>Pick your team</h2>
+  <select id="teamSelect" onchange="onTeamChange()"></select>
+  <div id="teamContent"></div>
+</div>
+
+<div id="combineView" style="display:none;">
+  <div id="combineContent"></div>
+</div>
+
+<div id="orgView" style="display:none;">
+  <div id="orgGate">
+    <h2>Organiser access</h2>
+    <input type="text" id="orgPasscodeInput" placeholder="Enter organiser passcode">
+    <button onclick="checkOrgPasscode()">Unlock</button>
+    <div class="msg error" id="orgGateMsg"></div>
+  </div>
+  <div id="orgContent" style="display:none;"></div>
+</div>
+
+<div class="note">Prototype only. Station passcodes, the organiser passcode, and hint text are placeholders, replace before the day. Real what3words address and digit order live in Organiser settings. This file should be hosted on GitHub Pages (or similar), not opened as a local file, for the Google Sheet backend to work.</div>
+
+<script>
+const ORG_PASSCODE = "MAGPIE2026"; // change this before the day
+
+// ---- Config: 10 physical stations, same challenge for every team ----
+const STATIONS = [
+  { id: 1, title: "Three legged race", passcode: "SCARF" },
+  { id: 2, title: "Wedding day laugh", passcode: "LAUGH" },
+  { id: 3, title: "Riddle to next spot", passcode: "OAK" },
+  { id: 4, title: "Tallest tower", passcode: "TOWER" },
+  { id: 5, title: "How they met", passcode: "MARKET" },
+  { id: 6, title: "Cipher word", passcode: "NEST" },
+  { id: 7, title: "Mime the clue", passcode: "MIME" },
+  { id: 8, title: "Wishes for the couple", passcode: "WISH" },
+  { id: 9, title: "Spot the difference", passcode: "SWAP" },
+  { id: 10, title: "Magpie group photo", passcode: "MAGPIE" },
+];
+
+// ---- Config: 7 teams. 3 build what3words words, 4 build digit-words for a 4 digit code ----
+const TEAMS_RAW = [
+  { name: "One for Sorrow",     kind: "number", target: "SEVEN", digit: 7, hint: "A lucky number for some" },
+  { name: "Two for Joy",        kind: "number", target: "THREE", digit: 3, hint: "Legs in that relay race, sort of" },
+  { name: "Three for a Girl",   kind: "word",   target: "ACCENT",    hint: "Changes depending on where in the world you're from" },
+  { name: "Four for a Boy",     kind: "word",   target: "ENCOURAGE", hint: "What you do when you cheer someone on" },
+  { name: "Five for Silver",    kind: "word",   target: "SWITCHED",  hint: "Past tense of flipping something over" },
+  { name: "Six for Gold",       kind: "number", target: "NINE",  digit: 9, hint: "One short of a perfect round number" },
+  { name: "Seven for a Secret", kind: "number", target: "FIVE",  digit: 5, hint: "Fingers on one hand" },
+];
+
+// ---- Default answer key, editable later from Organiser settings ----
+const DEFAULT_SETTINGS = {
+  correctWordOrder: ["ACCENT", "ENCOURAGE", "SWITCHED"],
+  correctDigitOrder: [7, 3, 9, 5],
+  w3wAddress: "accent.encourage.switched"
+};
+
+// ---- Deterministic seeded shuffle ----
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return h; }
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededShuffle(arr, seedStr) {
+  const rand = mulberry32(hashStr(seedStr));
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// ---- Build each team's route and letter-station map ----
+const TEAMS = TEAMS_RAW.map((team, teamIndex) => {
+  const route = [];
+  for (let k = 0; k < 10; k++) { route.push(((teamIndex + k) % 10) + 1); }
+  const L = team.target.length;
+  // Spread the L letter-stops evenly across the 10-stop route rather than
+  // clustering them at the start, so letters and fillers are staggered.
+  const routePositions = [];
+  for (let i = 0; i < L; i++) { routePositions.push(Math.floor(i * 10 / L)); }
+  const letterOrder = seededShuffle([...Array(L).keys()], team.name + '-order');
+  const stationLetterMap = {};
+  for (let i = 0; i < L; i++) {
+    const stationNum = route[routePositions[i]];
+    const letterIdx = letterOrder[i];
+    stationLetterMap[stationNum] = team.target[letterIdx];
+  }
+  return { ...team, route, wordLength: L, stationLetterMap };
+});
+
+function slug(s) { return s.toLowerCase().replace(/\s+/g, '-'); }
+
+// ---- Backend: your Apps Script Web App URL (the same one as before) ----
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymkTEx8CXbyEtt44byJ-muKtPbHRa3Y_-rwOuktgzA6hUd0yBw5RCg56FGma9HTpIF/exec";
+
+// Generic storage backed by a Google Sheet via Apps Script, with a local
+// in-memory cache as a same-session safety net if a call ever fails.
+const memoryFallback = {};
+let sawStorageFailure = false;
+
+function showFallbackBanner(text) {
+  const el = document.getElementById('storageBanner');
+  if (el) { el.style.display = 'block'; el.textContent = text; }
+}
+
+async function backendGet(key) {
+  const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.value; // string or null
+}
+
+async function backendSet(key, value) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight
+    body: JSON.stringify({ action: 'set', key: key, value: value })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return !!data.success;
+}
+
+async function backendDelete(key) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'delete', key: key })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return !!data.success;
+}
+
+async function storeGet(key, fallbackValue) {
+  try {
+    const raw = await backendGet(key);
+    if (raw === null || raw === undefined || raw === '') return fallbackValue;
+    memoryFallback[key] = JSON.parse(raw);
+    return memoryFallback[key];
+  } catch (e) {
+    console.error('Backend get failed for', key, e);
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Google Sheet backend, running on temporary memory for this session. Check the Apps Script URL and that this page is hosted on GitHub Pages (not opened as a local file)."); }
+    return memoryFallback[key] !== undefined ? memoryFallback[key] : fallbackValue;
+  }
+}
+
+async function storeSet(key, value) {
+  memoryFallback[key] = value;
+  try {
+    const ok = await backendSet(key, JSON.stringify(value));
+    if (!ok) throw new Error('backend set returned false');
+    return true;
+  } catch (e) {
+    console.error('Backend set failed for', key, e);
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Google Sheet backend, running on temporary memory for this session. Check the Apps Script URL and that this page is hosted on GitHub Pages (not opened as a local file)."); }
+    return true; // local cache still holds the value so the UI can proceed
+  }
+}
+
+async function storeDelete(key) {
+  delete memoryFallback[key];
+  try {
+    await backendDelete(key);
+  } catch (e) {
+    console.error('Backend delete failed for', key, e);
+  }
+}
+
+async function testBackendConnection() {
+  const msgEl = document.getElementById('connectionMsg');
+  msgEl.className = 'msg';
+  msgEl.textContent = 'Testing...';
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?key=__ping__');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    msgEl.className = 'msg ok';
+    msgEl.textContent = 'Connected to the Google Sheet backend.';
+  } catch (e) {
+    msgEl.className = 'msg error';
+    msgEl.textContent = 'Could not connect: ' + e.message + '. Check the Apps Script URL and that it is deployed with access set to Anyone.';
+  }
+}
+
+async function getProgress(teamName) {
+  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false });
+}
+async function saveProgress(teamName, progress) {
+  return storeSet('trail:progress:' + slug(teamName), progress);
+}
+async function getSettings() {
+  return storeGet('trail:settings', DEFAULT_SETTINGS);
+}
+async function saveSettings(settings) {
+  return storeSet('trail:settings', settings);
+}
+async function getCombineState() {
+  return storeGet('trail:combine', { wordOrderSolved: false, digitOrderSolved: false });
+}
+async function saveCombineState(state) {
+  return storeSet('trail:combine', state);
+}
+
+let currentTeam = null;
+let currentTeamProgress = null; // local cache for the active team, avoids a storage read before every submit
+let orgUnlocked = false;
+
+function setTab(tab) {
+  document.getElementById('teamView').style.display = tab === 'team' ? 'block' : 'none';
+  document.getElementById('combineView').style.display = tab === 'combine' ? 'block' : 'none';
+  document.getElementById('orgView').style.display = tab === 'org' ? 'block' : 'none';
+  document.getElementById('tabTeam').className = tab === 'team' ? '' : 'secondary';
+  document.getElementById('tabCombine').className = tab === 'combine' ? '' : 'secondary';
+  document.getElementById('tabOrg').className = tab === 'org' ? '' : 'secondary';
+  if (tab === 'combine') renderCombine();
+  if (tab === 'org') renderOrgGate();
+}
+
+function checkOrgPasscode() {
+  const val = document.getElementById('orgPasscodeInput').value;
+  if (val === ORG_PASSCODE) {
+    orgUnlocked = true;
+    renderOrgGate();
+    renderOrg();
+  } else {
+    document.getElementById('orgGateMsg').textContent = 'Wrong passcode.';
+  }
+}
+
+function renderOrgGate() {
+  document.getElementById('orgGate').style.display = orgUnlocked ? 'none' : 'block';
+  document.getElementById('orgContent').style.display = orgUnlocked ? 'block' : 'none';
+}
+
+function populateTeamSelect() {
+  const sel = document.getElementById('teamSelect');
+  sel.innerHTML = '<option value="">Choose your team...</option>' +
+    TEAMS.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+}
+
+async function onTeamChange() {
+  currentTeam = document.getElementById('teamSelect').value;
+  lastResult = null;
+  currentTeamProgress = null;
+  if (!currentTeam) { document.getElementById('teamContent').innerHTML = ''; return; }
+  currentTeamProgress = await getProgress(currentTeam);
+  await renderTeam();
+}
+
+let lastResult = null; // transient, not persisted: { letter, stationNum } for the confirmation screen
+
+async function renderTeam() {
+  const team = TEAMS.find(t => t.name === currentTeam);
+  const container = document.getElementById('teamContent');
+  if (!currentTeamProgress) currentTeamProgress = await getProgress(currentTeam);
+  const progress = currentTeamProgress;
+
+  const pct = Math.round((progress.stopIndex / 10) * 100);
+  let html = `<div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>`;
+  html += `<p class="sub">${progress.stopIndex} of 10 stations done &middot; ${progress.collected.length} of ${team.wordLength} letters collected</p>`;
+  if (!progress.solved && !lastResult) {
+    html += `<button class="test" onclick="testFastForwardTeam()">Test: fast-forward this whole team (1 storage write)</button>`;
+  }
+
+  if (lastResult) {
+    html += `<div class="card done">
+      <h2>${lastResult.letter ? 'Correct!' : 'Well done!'}</h2>
+      ${lastResult.letter
+        ? `<p>You found a letter: <span class="letter-tile">${lastResult.letter}</span></p>`
+        : `<p>No letter at this one.</p>`}
+      ${lastResult.nextStationNum
+        ? `<p><strong>Head to Station ${lastResult.nextStationNum} next.</strong></p>`
+        : `<p><strong>That's all 10 stations, time to unscramble your word.</strong></p>`}
+      <button onclick="dismissResult()">Continue</button>
+    </div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  if (progress.solved) {
+    html += `<div class="card done">
+      <h2>Solved!</h2>
+      <p>Your word is <span class="letter-tile">${team.target}</span></p>
+      <p class="sub">${team.kind === 'word' ? 'One of the three words in the what3words location. Head to the Combine tab to help place it in order.' : 'This spells the digit ' + team.digit + '. Head to the Combine tab to help place it in order.'}</p>
+    </div>`;
+  } else if (progress.stopIndex >= 10) {
+    html += `<div class="card">
+      <h2>Unscramble your word</h2>
+      <p>Your collected letters, in the order you found them:</p>
+      <p>${progress.collected.map(l => `<span class="letter-tile">${l}</span>`).join('')}</p>
+      <p class="sub">Rearrange them into a real word (${team.wordLength} letters) and type your answer below.</p>
+      <input type="text" id="unscrambleInput" placeholder="Your answer">
+      <button onclick="submitUnscramble()">Submit</button>
+      <button class="test" onclick="testFillUnscramble()">Test: fill correct answer</button>
+      <div class="msg" id="unscrambleMsg"></div>
+    </div>`;
+  } else {
+    const stationNum = team.route[progress.stopIndex];
+    const station = STATIONS.find(s => s.id === stationNum);
+    html += `<div class="card">
+      <div><span class="station-num">${stationNum}</span> <strong>${station.title}</strong></div>
+      <input type="text" id="stationInput" placeholder="Enter passcode from this task">
+      <button onclick="submitStation(${stationNum})">Submit</button>
+      <button class="test" onclick="testFillStation(${stationNum})">Test: fill correct answer</button>
+      <div class="msg" id="stationMsg"></div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function dismissResult() {
+  lastResult = null;
+  renderTeam();
+}
+
+let submitInFlight = false;
+
+function testFillStation(stationNum) {
+  const station = STATIONS.find(s => s.id === stationNum);
+  document.getElementById('stationInput').value = station.passcode;
+  submitStation(stationNum);
+}
+function testFillUnscramble() {
+  const team = TEAMS.find(t => t.name === currentTeam);
+  document.getElementById('unscrambleInput').value = team.target;
+  submitUnscramble();
+}
+
+async function testFastForwardTeam() {
+  // Completes the whole route in one go, using a single storage write,
+  // rather than one read+write per station. Avoids tripping any rate limit
+  // during quick testing. Not for use during the real event, testing only.
+  const team = TEAMS.find(t => t.name === currentTeam);
+  const progress = { stopIndex: 10, collected: [], solved: true };
+  // Rebuild the letters in the exact scrambled order the team would have collected them
+  for (let i = 0; i < 10; i++) {
+    const stationNum = team.route[i];
+    const letter = team.stationLetterMap[stationNum];
+    if (letter) progress.collected.push(letter);
+  }
+  const ok = await saveProgress(currentTeam, progress);
+  currentTeamProgress = progress;
+  const msgEl = document.getElementById('stationMsg') || document.getElementById('unscrambleMsg');
+  if (!ok && msgEl) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
+  lastResult = null;
+  await renderTeam();
+}
+
+async function submitStation(stationNum) {
+  if (submitInFlight) return;
+  submitInFlight = true;
+  try {
+    const team = TEAMS.find(t => t.name === currentTeam);
+    const station = STATIONS.find(s => s.id === stationNum);
+    const input = document.getElementById('stationInput');
+    const msgEl = document.getElementById('stationMsg');
+    const val = (input.value || '').trim().toUpperCase();
+
+    if (val !== station.passcode) {
+      msgEl.className = 'msg error';
+      msgEl.textContent = 'Not quite, try again.';
+      return;
+    }
+
+    const progress = currentTeamProgress;
+    // Guard: if this station isn't actually the team's current station, ignore
+    // (protects against a duplicate or delayed submission changing the wrong step)
+    if (team.route[progress.stopIndex] !== stationNum) { return; }
+
+    const letter = team.stationLetterMap[stationNum];
+    if (letter) progress.collected.push(letter);
+    progress.stopIndex += 1;
+    const ok = await saveProgress(currentTeam, progress);
+    if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
+    const nextStationNum = progress.stopIndex < 10 ? team.route[progress.stopIndex] : null;
+    lastResult = { letter: letter || null, stationNum, nextStationNum };
+    await renderTeam();
+  } finally {
+    submitInFlight = false;
+  }
+}
+
+async function submitUnscramble() {
+  if (submitInFlight) return;
+  submitInFlight = true;
+  try {
+    const team = TEAMS.find(t => t.name === currentTeam);
+    const input = document.getElementById('unscrambleInput');
+    const msgEl = document.getElementById('unscrambleMsg');
+    const val = (input.value || '').trim().toUpperCase();
+
+    if (val !== team.target) {
+      msgEl.className = 'msg error';
+      msgEl.textContent = 'Not quite, try again.';
+      return;
+    }
+
+    const progress = currentTeamProgress;
+    progress.solved = true;
+    const ok = await saveProgress(currentTeam, progress);
+    if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
+    await renderTeam();
+  } finally {
+    submitInFlight = false;
+  }
+}
+
+// ---- Combine tab: the group ordering puzzle, done before the box is found ----
+async function renderCombine() {
+  const container = document.getElementById('combineContent');
+  container.innerHTML = '<p>Loading...</p>';
+
+  const settings = await getSettings();
+  const combineState = await getCombineState();
+  const wordTeams = [];
+  const numberTeams = [];
+  for (const team of TEAMS) {
+    const progress = await getProgress(team.name);
+    if (team.kind === 'word') wordTeams.push({ team, progress });
+    else numberTeams.push({ team, progress });
+  }
+  const solvedWords = wordTeams.filter(w => w.progress.solved);
+  const solvedNumbers = numberTeams.filter(n => n.progress.solved);
+
+  let html = '<h2>Word order</h2>';
+  html = '<button class="secondary" onclick="renderCombine()">Refresh</button>' + html;
+  if (solvedWords.length < 3) {
+    html += `<p class="sub">Waiting on ${3 - solvedWords.length} more team(s) to solve their word.</p>`;
+    wordTeams.forEach(w => {
+      html += `<div class="card"><strong>${w.team.name}</strong>: ${w.progress.solved ? `<span class="letter-tile">${w.team.target}</span>` : 'not solved yet'}<div class="hint">${w.team.hint}</div></div>`;
+    });
+  } else if (combineState.wordOrderSolved) {
+    html += `<div class="card done"><strong>Word order confirmed:</strong> ${settings.correctWordOrder.join(' &rarr; ')}</div>`;
+  } else {
+    html += '<p class="sub">All three words are in. Use the clues to work out the order, then pick it below.</p>';
+    solvedWords.forEach(w => {
+      html += `<div class="card"><strong>${w.team.target}</strong><div class="hint">${w.team.hint}</div></div>`;
+    });
+    html += '<div class="card">';
+    for (let i = 0; i < 3; i++) {
+      html += `<label>Word ${i + 1}</label><select id="wordSlot${i}">` +
+        solvedWords.map(w => `<option value="${w.team.target}">${w.team.target}</option>`).join('') +
+        `</select>`;
+    }
+    html += `<button onclick="checkWordOrder()">Check word order</button>
+      <button class="test" onclick="testFillWordOrder()">Test: fill correct order</button>
+      <div class="msg" id="wordOrderMsg"></div></div>`;
+  }
+
+  html += '<h2>Digit order</h2>';
+  if (solvedNumbers.length < 4) {
+    html += `<p class="sub">Waiting on ${4 - solvedNumbers.length} more team(s) to solve their number.</p>`;
+    numberTeams.forEach(n => {
+      html += `<div class="card"><strong>${n.team.name}</strong>: ${n.progress.solved ? `<span class="letter-tile">${n.team.target} = ${n.team.digit}</span>` : 'not solved yet'}<div class="hint">${n.team.hint}</div></div>`;
+    });
+  } else if (combineState.digitOrderSolved) {
+    html += `<div class="card done"><strong>Digit order confirmed:</strong> ${settings.correctDigitOrder.join('')}</div>`;
+  } else {
+    html += '<p class="sub">All four numbers are in. Use the clues to work out the order, then pick it below.</p>';
+    solvedNumbers.forEach(n => {
+      html += `<div class="card"><strong>${n.team.target} = ${n.team.digit}</strong><div class="hint">${n.team.hint}</div></div>`;
+    });
+    html += '<div class="card">';
+    for (let i = 0; i < 4; i++) {
+      html += `<label>Digit ${i + 1}</label><select id="digitSlot${i}">` +
+        solvedNumbers.map(n => `<option value="${n.team.digit}">${n.team.digit} (${n.team.target})</option>`).join('') +
+        `</select>`;
+    }
+    html += `<button onclick="checkDigitOrder()">Check digit order</button>
+      <button class="test" onclick="testFillDigitOrder()">Test: fill correct order</button>
+      <div class="msg" id="digitOrderMsg"></div></div>`;
+  }
+
+  if (combineState.wordOrderSolved && combineState.digitOrderSolved) {
+    html += `<div class="card done">
+      <h2>Location unlocked</h2>
+      <p>What3words: <a class="reveal-link" href="https://what3words.com/${settings.w3wAddress}" target="_blank">///${settings.w3wAddress}</a></p>
+      <p>Lockbox code: <span class="letter-tile">${settings.correctDigitOrder.join('')}</span></p>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function testFillWordOrder() {
+  getSettings().then(settings => {
+    for (let i = 0; i < 3; i++) {
+      const sel = document.getElementById('wordSlot' + i);
+      if (sel) sel.value = settings.correctWordOrder[i];
+    }
+    checkWordOrder();
+  });
+}
+function testFillDigitOrder() {
+  getSettings().then(settings => {
+    for (let i = 0; i < 4; i++) {
+      const sel = document.getElementById('digitSlot' + i);
+      if (sel) sel.value = settings.correctDigitOrder[i];
+    }
+    checkDigitOrder();
+  });
+}
+
+async function checkWordOrder() {
+  const settings = await getSettings();
+  const guess = [0, 1, 2].map(i => document.getElementById('wordSlot' + i).value);
+  const msgEl = document.getElementById('wordOrderMsg');
+  const correct = JSON.stringify(guess) === JSON.stringify(settings.correctWordOrder);
+  if (correct) {
+    const state = await getCombineState();
+    state.wordOrderSolved = true;
+    await saveCombineState(state);
+    await renderCombine();
+  } else {
+    msgEl.className = 'msg error';
+    msgEl.textContent = 'Not quite that order, try again.';
+  }
+}
+
+async function checkDigitOrder() {
+  const settings = await getSettings();
+  const guess = [0, 1, 2, 3].map(i => Number(document.getElementById('digitSlot' + i).value));
+  const msgEl = document.getElementById('digitOrderMsg');
+  const correct = JSON.stringify(guess) === JSON.stringify(settings.correctDigitOrder);
+  if (correct) {
+    const state = await getCombineState();
+    state.digitOrderSolved = true;
+    await saveCombineState(state);
+    await renderCombine();
+  } else {
+    msgEl.className = 'msg error';
+    msgEl.textContent = 'Not quite that order, try again.';
+  }
+}
+
+// ---- Organiser view: progress table plus editable answer key ----
+async function renderOrg() {
+  const container = document.getElementById('orgContent');
+  container.innerHTML = '<p>Loading...</p>';
+  const settings = await getSettings();
+
+  let rows = '';
+  for (const team of TEAMS) {
+    const progress = await getProgress(team.name);
+    rows += `<tr>
+      <td>${team.name}</td><td>${team.kind}</td><td>${progress.stopIndex}/10</td>
+      <td>${progress.collected.length}/${team.wordLength}</td><td>${progress.solved ? team.target : '-'}</td>
+    </tr>`;
+  }
+
+  let html = `<h2>All teams</h2>
+    <div class="card">
+      <p class="sub">Backend: Google Sheet via Apps Script</p>
+      <button class="secondary" onclick="testBackendConnection()">Test connection</button>
+      <div class="msg" id="connectionMsg"></div>
+    </div>
+    <button class="secondary" onclick="renderOrg()">Refresh</button>
+    <table><tr><th>Team</th><th>Type</th><th>Stations</th><th>Letters</th><th>Word</th></tr>${rows}</table>`;
+
+  html += `<h2>Answer key (editable)</h2>
+    <div class="card">
+      <label>What3words address</label>
+      <input type="text" id="settingW3w" value="${settings.w3wAddress}">
+      <label>Word order (comma separated)</label>
+      <input type="text" id="settingWordOrder" value="${settings.correctWordOrder.join(',')}">
+      <label>Digit order (4 digits, no spaces)</label>
+      <input type="text" id="settingDigitOrder" value="${settings.correctDigitOrder.join('')}">
+      <button onclick="saveOrgSettings()">Save answer key</button>
+      <div class="msg" id="settingsMsg"></div>
+    </div>
+    <h2>Reset</h2>
+    <div class="card">
+      <p class="sub">Clears every team's progress and the Combine state, for everyone. Use this between test runs, or before the real event starts.</p>
+      ${resetConfirming
+        ? `<p><strong>Are you sure?</strong> This can't be undone.</p>
+           <button onclick="reallyResetAllData()" style="background:#b3261e;">Yes, reset everything</button>
+           <button class="secondary" onclick="cancelReset()">Cancel</button>`
+        : `<button class="secondary" onclick="resetAllData()" style="border-color:#b3261e; color:#b3261e;">Reset all data</button>`}
+      <div class="msg" id="resetMsg"></div>
+    </div>`;
+
+  container.innerHTML = html;
+}
+
+async function saveOrgSettings() {
+  const w3w = document.getElementById('settingW3w').value.trim();
+  const wordOrder = document.getElementById('settingWordOrder').value.split(',').map(w => w.trim().toUpperCase());
+  const digitOrder = document.getElementById('settingDigitOrder').value.trim().split('').map(Number);
+  const msgEl = document.getElementById('settingsMsg');
+
+  const settings = { w3wAddress: w3w, correctWordOrder: wordOrder, correctDigitOrder: digitOrder };
+  const ok = await saveSettings(settings);
+  msgEl.className = ok ? 'msg ok' : 'msg error';
+  msgEl.textContent = ok ? 'Saved.' : 'Could not save, try again.';
+}
+
+let resetConfirming = false;
+
+function resetAllData() {
+  resetConfirming = true;
+  renderOrg();
+}
+
+function cancelReset() {
+  resetConfirming = false;
+  renderOrg();
+}
+
+async function reallyResetAllData() {
+  const keys = TEAMS.map(t => 'trail:progress:' + slug(t.name))
+    .concat(['trail:settings', 'trail:combine']);
+
+  for (const key of keys) {
+    await storeDelete(key);
+  }
+
+  currentTeam = null;
+  currentTeamProgress = null;
+  lastResult = null;
+  resetConfirming = false;
+  const teamSelectEl = document.getElementById('teamSelect');
+  if (teamSelectEl) teamSelectEl.value = '';
+  const teamContentEl = document.getElementById('teamContent');
+  if (teamContentEl) teamContentEl.innerHTML = '';
+
+  await renderOrg();
+  const msgEl = document.getElementById('resetMsg');
+  if (msgEl) { msgEl.className = 'msg ok'; msgEl.textContent = 'All data reset.'; }
+}
+
+populateTeamSelect();
+</script>
+</body>
+</html>
