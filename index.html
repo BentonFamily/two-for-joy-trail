@@ -10,17 +10,30 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="shortcut icon" href="favicon.ico">
 <style>
+  :root {
+    --ink: #17181a;
+    --cream: #faf7f2;
+    --teal: #1f6f8f;
+    --teal-deep: #1a5f5a;
+    --indigo: #3a3f8f;
+    --gold: #e8a33d;
+    --brand-gradient: linear-gradient(135deg, var(--teal-deep), var(--teal) 55%, var(--indigo));
+  }
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    background: #faf7f2;
-    color: #22221f;
+    background: var(--cream);
+    color: var(--ink);
     max-width: 480px;
     margin: 0 auto;
     padding: 16px;
   }
   h1 { font-size: 20px; margin-bottom: 4px; }
-  h2 { font-size: 16px; margin: 20px 0 8px; }
+  h1 .brand-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--brand-gradient); margin-right: 8px;
+  }
+  h2 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
   p.sub { color: #666; font-size: 13px; margin-top: 0; }
   select, button, input {
     font-size: 15px;
@@ -30,38 +43,43 @@
     width: 100%;
     margin-bottom: 8px;
   }
-  button { background: #22221f; color: #fff; border: none; cursor: pointer; }
-  button.secondary { background: #fff; color: #22221f; border: 1px solid #999; }
+  button { background: var(--brand-gradient); color: #fff; border: none; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--teal); border: 1px solid var(--teal); }
   button.test { background: #fff; color: #8a6d00; border: 1px dashed #d4b106; font-size: 12px; padding: 6px 8px; }
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin-bottom: 12px; background: #fff; }
   .card.done { background: #eef7ee; border-color: #a8d5a8; }
   .card.locked { background: #fdf0f0; border-color: #e0b4b4; }
   .station-num {
-    display: inline-block; background: #22221f; color: #fff; border-radius: 50%;
+    display: inline-block; background: var(--brand-gradient); color: #fff; border-radius: 50%;
     width: 28px; height: 28px; text-align: center; line-height: 28px; font-weight: 600; margin-right: 6px;
   }
   .letter-tile {
-    display: inline-block; background: #22221f; color: #fff; padding: 4px 10px;
+    display: inline-block; background: var(--brand-gradient); color: #fff; padding: 4px 10px;
     border-radius: 4px; font-size: 16px; margin: 2px; font-weight: 600;
   }
   .msg { font-size: 13px; margin-top: 4px; }
   .msg.error { color: #b3261e; }
   .msg.ok { color: #2e7d32; }
   .progress { background: #eee; border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 12px; }
-  .progress-bar { background: #22221f; height: 100%; }
+  .progress-bar { background: var(--brand-gradient); height: 100%; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th, td { text-align: left; padding: 4px 5px; border-bottom: 1px solid #eee; }
   .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
   .tabs button { width: auto; flex: 1; font-size: 13px; }
   .note { font-size: 12px; color: #888; border-top: 1px solid #eee; margin-top: 20px; padding-top: 10px; }
   .hint { font-size: 12px; color: #666; font-style: italic; margin-top: 4px; }
-  a.reveal-link { color: #1a5fb4; font-weight: 600; }
+  a.reveal-link { color: var(--teal); font-weight: 600; }
+  @keyframes confetti-fall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0.9; }
+    100% { transform: translateY(105vh) rotate(360deg); opacity: 0.4; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Two for Joy Trail</h1>
+<h1><span class="brand-dot"></span>Two for Joy Trail</h1>
 <p class="sub">Prototype. 10 stations, 7 teams, ordering solved in-app before the box location is known.</p>
+<div id="photoLinkBar"></div>
 
 <div id="storageBanner" style="display:none; background:#fff3cd; color:#664d03; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
 
@@ -100,10 +118,10 @@ const ORG_PASSCODE = "MAGPIE2026"; // change this before the day
 const STATIONS = [
   { id: 1, title: "Three legged race", prompt: "Enter your race time (e.g. 0:42)", validation: { type: "number" } },
   { id: 2, title: "Wedding day laugh", prompt: "Type one word from the story you heard", validation: { type: "text" } },
-  { id: 3, title: "The First Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "OAK" } },
+  { id: 3, title: "The First Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "OAK" }, hint: "Hint: squirrels bury these every autumn, and some grow into very old trees." },
   { id: 4, title: "Tallest tower", prompt: "How many pieces did you use? Enter the number", validation: { type: "number" } },
   { id: 5, title: "How they met", prompt: "Type one word from the story you heard", validation: { type: "text" } },
-  { id: 6, title: "The Second Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "NEST" } },
+  { id: 6, title: "The Second Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "NEST" }, hint: "Hint: it's what a bird builds to keep its eggs safe." },
   { id: 7, title: "Mime the clue", prompt: "How many guesses did it take? Enter the number", validation: { type: "number" } },
   { id: 8, title: "Wishes for the couple", prompt: "Type one word from your favourite wish", validation: { type: "text" } },
   { id: 9, title: "Spot the difference", prompt: "Type one word describing what changed", validation: { type: "text" } },
@@ -182,6 +200,12 @@ function slug(s) { return s.toLowerCase().replace(/\s+/g, '-'); }
 
 // ---- Backend: your Firebase Realtime Database URL goes here ----
 const FIREBASE_DB_URL = "https://two-for-joy-trail-default-rtdb.europe-west1.firebasedatabase.app/";
+
+// ---- Optional: a shared album link for photo/video tasks (tower, magpie pose, wishes video) ----
+// Create a Google Photos "shared album" (with "let anyone add photos" turned on) or a
+// Drive folder anyone-with-link-can-upload-to, and paste that link here. Leave the
+// placeholder in place to hide the photo link entirely until you've set one up.
+const PHOTO_ALBUM_URL = "https://drive.google.com/drive/folders/1_rJ5BruC2Tuw3_3n_DwHZc_GUxfpRA0-?usp=sharing";
 
 // Generic storage backed by Firebase Realtime Database's REST API, with a
 // local in-memory cache as a same-session safety net if a call ever fails.
@@ -267,7 +291,7 @@ async function testBackendConnection() {
 }
 
 async function getProgress(teamName) {
-  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false });
+  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false, wrongAttempts: {} });
 }
 async function saveProgress(teamName, progress) {
   return storeSet('trail:progress:' + slug(teamName), progress);
@@ -285,6 +309,51 @@ async function saveCombineState(state) {
   return storeSet('trail:combine', state);
 }
 
+// ---- Celebration effect: confetti + a short chime, no external assets needed ----
+function playChime(big) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const notes = big ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const startTime = ctx.currentTime + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.35);
+    });
+  } catch (e) { /* audio not available, silently skip */ }
+}
+
+function celebrate(big) {
+  playChime(big);
+  const colours = ['#1f6f8f', '#3a3f8f', '#e8a33d', '#17181a', '#1a5f5a'];
+  const count = big ? 60 : 24;
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:9999; overflow:hidden;';
+  document.body.appendChild(container);
+
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('div');
+    const size = 6 + Math.random() * 6;
+    const left = Math.random() * 100;
+    const duration = 1.6 + Math.random() * 1.2;
+    const delay = Math.random() * 0.3;
+    const colour = colours[Math.floor(Math.random() * colours.length)];
+    piece.style.cssText = `position:absolute; top:-5%; left:${left}%; width:${size}px; height:${size}px;
+      background:${colour}; opacity:0.9; border-radius:${Math.random() > 0.5 ? '50%' : '2px'};
+      animation: confetti-fall ${duration}s ease-in ${delay}s forwards;`;
+    container.appendChild(piece);
+  }
+
+  setTimeout(() => container.remove(), (big ? 3000 : 2200));
+}
 let currentTeam = null;
 let currentTeamProgress = null; // local cache for the active team, avoids a storage read before every submit
 let orgUnlocked = false;
@@ -298,6 +367,23 @@ function setTab(tab) {
   document.getElementById('tabOrg').className = tab === 'org' ? '' : 'secondary';
   if (tab === 'combine') renderCombine();
   if (tab === 'org') renderOrgGate();
+  stopOrgPolling();
+  if (tab === 'org' && orgUnlocked) startOrgPolling();
+}
+
+let orgPollHandle = null;
+let allTeamsSolvedNotified = false;
+
+function startOrgPolling() {
+  if (orgPollHandle) return;
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  orgPollHandle = setInterval(() => { renderOrg(); }, 12000);
+}
+
+function stopOrgPolling() {
+  if (orgPollHandle) { clearInterval(orgPollHandle); orgPollHandle = null; }
 }
 
 function checkOrgPasscode() {
@@ -306,6 +392,7 @@ function checkOrgPasscode() {
     orgUnlocked = true;
     renderOrgGate();
     renderOrg();
+    startOrgPolling();
   } else {
     document.getElementById('orgGateMsg').textContent = 'Wrong passcode.';
   }
@@ -381,12 +468,13 @@ async function renderTeam() {
   } else {
     const stationNum = team.route[progress.stopIndex];
     const station = STATIONS.find(s => s.id === stationNum);
+    const priorWrong = (progress.wrongAttempts && progress.wrongAttempts[stationNum]) || 0;
     html += `<div class="card">
       <div><span class="station-num">${stationNum}</span> <strong>${station.title}</strong></div>
       <input type="text" id="stationInput" placeholder="${station.prompt}">
       <button onclick="submitStation(${stationNum})">Submit</button>
       <button class="test" onclick="testFillStation(${stationNum})">Test: fill correct answer</button>
-      <div class="msg" id="stationMsg"></div>
+      <div class="msg" id="stationMsg">${priorWrong >= 3 && station.hint ? station.hint : ''}</div>
     </div>`;
   }
 
@@ -445,8 +533,19 @@ async function submitStation(stationNum) {
     const val = input.value || '';
 
     if (!validateAnswer(station, val)) {
-      msgEl.className = 'msg error';
-      msgEl.textContent = station.validation.type === 'exact' ? 'Not quite, try again.' : 'Please enter an answer to continue.';
+      if (station.validation.type === 'exact') {
+        const progress = currentTeamProgress;
+        if (!progress.wrongAttempts) progress.wrongAttempts = {};
+        progress.wrongAttempts[stationNum] = (progress.wrongAttempts[stationNum] || 0) + 1;
+        await saveProgress(currentTeam, progress);
+        msgEl.className = 'msg error';
+        msgEl.textContent = progress.wrongAttempts[stationNum] >= 3 && station.hint
+          ? 'Not quite, try again. ' + station.hint
+          : 'Not quite, try again.';
+      } else {
+        msgEl.className = 'msg error';
+        msgEl.textContent = 'Please enter an answer to continue.';
+      }
       return;
     }
 
@@ -462,6 +561,7 @@ async function submitStation(stationNum) {
     if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
     const nextStationNum = progress.stopIndex < 10 ? team.route[progress.stopIndex] : null;
     lastResult = { letter: letter || null, stationNum, nextStationNum };
+    if (letter) celebrate(false);
     await renderTeam();
   } finally {
     submitInFlight = false;
@@ -487,6 +587,7 @@ async function submitUnscramble() {
     progress.solved = true;
     const ok = await saveProgress(currentTeam, progress);
     if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
+    celebrate(true);
     await renderTeam();
   } finally {
     submitInFlight = false;
@@ -601,6 +702,7 @@ async function checkWordOrder() {
     const state = await getCombineState();
     state.wordOrderSolved = true;
     await saveCombineState(state);
+    celebrate(state.digitOrderSolved ? true : false);
     await renderCombine();
   } else {
     msgEl.className = 'msg error';
@@ -617,6 +719,7 @@ async function checkDigitOrder() {
     const state = await getCombineState();
     state.digitOrderSolved = true;
     await saveCombineState(state);
+    celebrate(state.wordOrderSolved ? true : false);
     await renderCombine();
   } else {
     msgEl.className = 'msg error';
@@ -627,7 +730,7 @@ async function checkDigitOrder() {
 // ---- Organiser view: progress table plus editable answer key ----
 async function renderOrg() {
   const container = document.getElementById('orgContent');
-  container.innerHTML = '<p>Loading...</p>';
+  if (!container.dataset.loadedOnce) { container.innerHTML = '<p>Loading...</p>'; }
 
   const [settings, allProgress] = await Promise.all([
     getSettings(),
@@ -651,9 +754,20 @@ async function renderOrg() {
     </tr>`;
   });
 
-  let html = `<h2>All teams</h2>
+  const allSolved = allProgress.every(p => p.solved);
+  if (allSolved && !allTeamsSolvedNotified) {
+    allTeamsSolvedNotified = true;
+    celebrate(true);
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Two for Joy Trail', { body: 'All 7 teams have solved their word!' });
+    }
+  }
+  if (!allSolved) { allTeamsSolvedNotified = false; }
+
+  let html = allSolved ? `<div class="card done"><strong>All 7 teams have solved their word!</strong> Head to the Combine tab to work out the final order.</div>` : '';
+  html += `<h2>All teams</h2>
     <div class="card">
-      <p class="sub">Backend: Firebase Realtime Database</p>
+      <p class="sub">Backend: Firebase Realtime Database &middot; auto-refreshing</p>
       <button class="secondary" onclick="testBackendConnection()">Test connection</button>
       <div class="msg" id="connectionMsg"></div>
     </div>
@@ -683,6 +797,7 @@ async function renderOrg() {
     </div>`;
 
   container.innerHTML = html;
+  container.dataset.loadedOnce = 'true';
 }
 
 async function saveOrgSettings() {
@@ -721,6 +836,7 @@ async function reallyResetAllData() {
   currentTeamProgress = null;
   lastResult = null;
   resetConfirming = false;
+  allTeamsSolvedNotified = false;
   const teamSelectEl = document.getElementById('teamSelect');
   if (teamSelectEl) teamSelectEl.value = '';
   const teamContentEl = document.getElementById('teamContent');
@@ -731,7 +847,19 @@ async function reallyResetAllData() {
   if (msgEl) { msgEl.className = 'msg ok'; msgEl.textContent = 'All data reset.'; }
 }
 
+function renderPhotoLink() {
+  const el = document.getElementById('photoLinkBar');
+  if (!el) return;
+  if (!PHOTO_ALBUM_URL || PHOTO_ALBUM_URL.startsWith('PASTE_YOUR')) return;
+  el.innerHTML = `<div class="card" style="text-align:center;">
+    <a href="${PHOTO_ALBUM_URL}" target="_blank" rel="noopener" style="text-decoration:none; font-weight:600; color:var(--teal);">
+      \u{1F4F7} Share your team's photos &amp; videos here
+    </a>
+  </div>`;
+}
+
 populateTeamSelect();
+renderPhotoLink();
 </script>
 </body>
 </html>
