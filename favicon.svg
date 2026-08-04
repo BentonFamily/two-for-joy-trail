@@ -1,35 +1,24 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="sheen" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1a5f5a"/>
-      <stop offset="50%" stop-color="#1f6f8f"/>
-      <stop offset="100%" stop-color="#3a3f8f"/>
-    </linearGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="#0d4e43"/>
 
-  <circle cx="32" cy="32" r="32" fill="#faf7f2"/>
+  <!-- Bold tail, single clean triangle -->
+  <path d="M 260 260 L 430 160 L 400 250 Z" fill="#0b171a"/>
 
-  <!-- Long pointed tail, iridescent -->
-  <path d="M 38 36 L 59 22 L 57 30 Z" fill="url(#sheen)"/>
+  <!-- Body, simple rounded blob -->
+  <ellipse cx="210" cy="270" rx="110" ry="90" fill="#0b171a"/>
 
-  <!-- Main body -->
-  <ellipse cx="28" cy="34" rx="17" ry="13" fill="#17181a"/>
-
-  <!-- White belly patch -->
-  <ellipse cx="26" cy="37" rx="8" ry="7" fill="#faf7f2"/>
-
-  <!-- Iridescent wing/shoulder patch -->
-  <ellipse cx="35" cy="28" rx="4.5" ry="7" transform="rotate(-20 35 28)" fill="url(#sheen)"/>
+  <!-- White belly -->
+  <ellipse cx="195" cy="295" rx="58" ry="50" fill="#ffffff"/>
 
   <!-- Head -->
-  <circle cx="18" cy="23" r="9" fill="#17181a"/>
+  <circle cx="150" cy="185" r="65" fill="#0b171a"/>
 
   <!-- Beak -->
-  <path d="M 10 23 L 2 21 L 10 20 Z" fill="#e8a33d"/>
+  <path d="M 90 185 L 30 170 L 90 155 Z" fill="#0b171a"/>
 
   <!-- Eye -->
-  <circle cx="17" cy="21" r="1.7" fill="#faf7f2"/>
+  <circle cx="140" cy="165" r="12" fill="#ffffff"/>
 
-  <!-- Legs -->
-  <path d="M 23 46 L 21 52 M 30 46 L 30 52" stroke="#17181a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Legs, thick and short so they hold up small -->
+  <path d="M 175 350 L 165 400 M 225 350 L 225 400" stroke="#0b171a" stroke-width="16" stroke-linecap="round"/>
 </svg>
