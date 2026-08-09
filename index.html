@@ -76,8 +76,11 @@
 </head>
 <body>
 
-<h1><span class="brand-dot"></span>Two for Joy Trail</h1>
-<p class="sub">Prototype. 10 stations, 7 teams, ordering solved in-app before the box location is known.</p>
+<div style="text-align:center; margin-bottom:4px;">
+  <img src="magpies-banner.png" alt="Two magpies" style="max-width:220px; width:100%; height:auto;">
+</div>
+<h1 style="text-align:center;"><span class="brand-dot"></span>Two for Joy Trail</h1>
+<p class="sub" style="text-align:center;">Ten stations. Seven teams. One lockbox waiting to be cracked. Let's cause some chaos.</p>
 <div id="photoLinkBar"></div>
 
 <div id="storageBanner" style="display:none; background:#fff3cd; color:#664d03; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
@@ -85,7 +88,12 @@
 <div class="tabs">
   <button id="tabTeam" onclick="setTab('team')">Team view</button>
   <button id="tabCombine" class="secondary" onclick="setTab('combine')">Combine</button>
+  <button id="tabRules" class="secondary" onclick="setTab('rules')">Rules</button>
   <button id="tabOrg" class="secondary" onclick="setTab('org')">Organiser</button>
+</div>
+
+<div id="rulesView" style="display:none;">
+  <div id="rulesContent"></div>
 </div>
 
 <div id="teamView">
@@ -108,7 +116,7 @@
   <div id="orgContent" style="display:none;"></div>
 </div>
 
-<div class="note">Prototype only. Station passcodes, the organiser passcode, and hint text are placeholders, replace before the day. Real what3words address and digit order live in Organiser settings. Before this will work, set FIREBASE_DB_URL near the top of the script to your Firebase Realtime Database URL.</div>
+
 
 <script>
 const ORG_PASSCODE = "MAGPIE2026"; // change this before the day
@@ -121,7 +129,7 @@ const STATIONS = [
   { id: 4, title: "Tallest tower", prompt: "Measure your tower's height in cm, enter the number", validation: { type: "number" } },
   { id: 5, title: "The Magic Square", prompt: "Type your answer to the puzzle", validation: { type: "exact", answer: "HOPE" }, hint: "Hint: every row and column adds up to the same total." },
   { id: 6, title: "The Second Riddle", prompt: "Type your answer to the riddle", validation: { type: "exact", answer: "NEST" }, hint: "Hint: it's what a bird builds to keep its eggs safe." },
-  { id: 7, title: "A Question for the Newlyweds", prompt: "Type one word summing up your chosen question or story", validation: { type: "text" } },
+  { id: 7, title: "A Question for Henry & Caro", prompt: "Type one word summing up your chosen question or story", validation: { type: "text" } },
   { id: 8, title: "Write a Poem", prompt: "Type one word that sums up your poem", validation: { type: "text" } },
   { id: 9, title: "Recreate the Photo", prompt: "Enter how many people are in your recreation photo", validation: { type: "number" } },
   { id: 10, title: "Magpie group photo", prompt: "Type how many people are in your photo", validation: { type: "number" } },
@@ -290,7 +298,7 @@ async function testBackendConnection() {
 }
 
 async function getProgress(teamName) {
-  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false, wrongAttempts: {} });
+  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false, wrongAttempts: {}, textResponses: {} });
 }
 async function saveProgress(teamName, progress) {
   return storeSet('trail:progress:' + slug(teamName), progress);
@@ -360,11 +368,14 @@ let orgUnlocked = false;
 function setTab(tab) {
   document.getElementById('teamView').style.display = tab === 'team' ? 'block' : 'none';
   document.getElementById('combineView').style.display = tab === 'combine' ? 'block' : 'none';
+  document.getElementById('rulesView').style.display = tab === 'rules' ? 'block' : 'none';
   document.getElementById('orgView').style.display = tab === 'org' ? 'block' : 'none';
   document.getElementById('tabTeam').className = tab === 'team' ? '' : 'secondary';
   document.getElementById('tabCombine').className = tab === 'combine' ? '' : 'secondary';
+  document.getElementById('tabRules').className = tab === 'rules' ? '' : 'secondary';
   document.getElementById('tabOrg').className = tab === 'org' ? '' : 'secondary';
   if (tab === 'combine') renderCombine();
+  if (tab === 'rules') renderRules();
   if (tab === 'org') renderOrgGate();
   stopOrgPolling();
   if (tab === 'org' && orgUnlocked) startOrgPolling();
@@ -506,7 +517,7 @@ async function testFastForwardTeam() {
   // rather than one read+write per station. Avoids tripping any rate limit
   // during quick testing. Not for use during the real event, testing only.
   const team = TEAMS.find(t => t.name === currentTeam);
-  const progress = { stopIndex: 10, collected: [], solved: true };
+  const progress = { stopIndex: 10, collected: [], solved: true, textResponses: {} };
   // Rebuild the letters in the exact scrambled order the team would have collected them
   for (let i = 0; i < 10; i++) {
     const stationNum = team.route[i];
@@ -555,6 +566,10 @@ async function submitStation(stationNum) {
 
     const letter = team.stationLetterMap[stationNum];
     if (letter) progress.collected.push(letter);
+    if (station.validation.type === 'text') {
+      if (!progress.textResponses) progress.textResponses = {};
+      progress.textResponses[stationNum] = val.trim();
+    }
     progress.stopIndex += 1;
     const ok = await saveProgress(currentTeam, progress);
     if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
@@ -773,7 +788,27 @@ async function renderOrg() {
     <button class="secondary" onclick="renderOrg()">Refresh</button>
     <table><tr><th>Team</th><th>Type</th><th>Where now</th><th>Stations</th><th>Letters</th><th>Word</th></tr>${rows}</table>`;
 
+  const textStationIds = STATIONS.filter(s => s.validation.type === 'text').map(s => s.id);
+  let wordsHtml = '';
+  TEAMS.forEach((team, i) => {
+    const progress = allProgress[i];
+    const responses = progress.textResponses || {};
+    const entries = textStationIds.filter(id => responses[id]);
+    if (entries.length === 0) return;
+    wordsHtml += `<div class="card"><strong>${team.name}</strong><br>`;
+    entries.forEach(id => {
+      const station = STATIONS.find(s => s.id === id);
+      wordsHtml += `<span class="sub">Station ${id} (${station.title}): </span><span class="letter-tile">${responses[id]}</span> `;
+    });
+    wordsHtml += `</div>`;
+  });
+
+  html += `<h2>Team words</h2>
+    <p class="sub">Every word submitted for the poem, the question, and other open-ended stations, a nice thing to look back on afterwards.</p>
+    ${wordsHtml || '<p class="sub">Nothing submitted yet.</p>'}`;
+
   html += `<h2>Answer key (editable)</h2>
+    ${settings.correctDigitOrder.join('') === '7395' ? `<div class="card locked"><strong>Reminder:</strong> the digit order below is still the placeholder (7395). Set your real 4-digit code before the day.</div>` : ''}
     <div class="card">
       <label>What3words address</label>
       <input type="text" id="settingW3w" value="${settings.w3wAddress}">
@@ -855,6 +890,41 @@ function renderPhotoLink() {
       \u{1F4F7} Share your team's photos &amp; videos here
     </a>
   </div>`;
+}
+
+function renderRules() {
+  const el = document.getElementById('rulesContent');
+
+  const stationRows = STATIONS.map(s => {
+    const kind = s.validation.type === 'exact' ? 'Solve it' : 'Do it, then confirm';
+    return `<tr><td>${s.id}</td><td>${s.title}</td><td>${s.prompt}</td></tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <h2>How this all works</h2>
+    <div class="card">
+      <p><strong>1. Pick your team.</strong> Open Team view and choose your team's name, one phone per team is all you need.</p>
+      <p><strong>2. Visit your stations.</strong> The app tells you which station to head to next after each one, every team's order is different, so you won't all be queuing at the same spot.</p>
+      <p><strong>3. Every station needs an answer.</strong> Do the task, then type something into the app. What you type depends on the station, see the full list below, a time, a headcount, a single word, or the actual answer to a puzzle.</p>
+      <p><strong>4. Some stations give you a letter, some don't.</strong> Either way, the app always tells you where to go next.</p>
+      <p><strong>5. Unscramble.</strong> Once you've done all 10, the app shows your collected letters jumbled up, work together to rearrange them into a real word.</p>
+      <p><strong>6. Combine.</strong> Once every team has solved their word, head to the Combine tab and work out the order together.</p>
+      <p><strong>7. Find the box.</strong> Get both orders right, and the app reveals a real location and a lockbox code.</p>
+    </div>
+
+    <h2>What to type at each station</h2>
+    <div class="card">
+      <p class="sub">Every single station ends the same way, do the task, then type something in. Here's exactly what each one is asking for.</p>
+      <table>
+        <tr><th>#</th><th>Station</th><th>What to type in</th></tr>
+        ${stationRows}
+      </table>
+    </div>
+
+    <div class="card">
+      <p class="sub">Stuck, confused, or the app's gone quiet? Find Caro & Henry, we'd honestly love the excuse to come and see how you're getting on.</p>
+    </div>
+  `;
 }
 
 populateTeamSelect();
