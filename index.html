@@ -304,7 +304,7 @@ async function storeGet(key, fallbackValue) {
     return val;
   } catch (e) {
     console.error('Backend get failed for', key, e);
-    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Firebase backend, running on temporary memory for this session. Check the Database URL and that the rules allow read/write."); }
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Signal's a bit patchy right now. Keep playing as normal, it'll catch up and save properly the moment signal's back. Just try not to close this tab until then."); }
     return memoryFallback[key] !== undefined ? memoryFallback[key] : fallbackValue;
   }
 }
@@ -316,7 +316,7 @@ async function storeSet(key, value) {
     return true;
   } catch (e) {
     console.error('Backend set failed for', key, e);
-    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Couldn't reach the Firebase backend, running on temporary memory for this session. Check the Database URL and that the rules allow read/write."); }
+    if (!sawStorageFailure) { sawStorageFailure = true; showFallbackBanner("Signal's a bit patchy right now. Keep playing as normal, it'll catch up and save properly the moment signal's back. Just try not to close this tab until then."); }
     return true; // local cache still holds the value so the UI can proceed
   }
 }
@@ -822,8 +822,16 @@ async function renderOrg() {
     } else {
       whereNow = 'Station ' + team.route[progress.stopIndex];
     }
+    const pct = Math.round((progress.stopIndex / 10) * 100);
+    const barColour = progress.solved ? '#2e7d32' : 'var(--brand-gradient)';
     rows += `<tr>
-      <td>${team.name}</td><td>${team.kind}</td><td>${whereNow}</td><td>${progress.stopIndex}/10</td>
+      <td>${team.name}</td><td>${team.kind}</td><td>${whereNow}</td>
+      <td>
+        <div style="font-size:11px; white-space:nowrap;">${progress.stopIndex}/10</div>
+        <div style="background:#eee; border-radius:3px; height:6px; width:50px; overflow:hidden;">
+          <div style="background:${barColour}; height:100%; width:${pct}%;"></div>
+        </div>
+      </td>
       <td>${progress.collected.length}/${team.wordLength}</td><td>${progress.solved ? team.target : '-'}</td>
     </tr>`;
   });
@@ -1060,6 +1068,7 @@ function renderRules() {
       <p><strong>5. Unscramble.</strong> Once you've done all 10, the app shows your collected letters jumbled up, work together to rearrange them into a real word.</p>
       <p><strong>6. Combine.</strong> Once every team has solved their word, head to the Combine tab and work out the order together.</p>
       <p><strong>7. Find the box.</strong> Get both orders right, and the app reveals a real location and a lockbox code.</p>
+      <p class="sub">We're out in the woods, so signal might dip here and there. If you see a yellow banner about that, don't worry, it's normal, just keep going, it sorts itself out the moment signal's back.</p>
     </div>
 
     <h2>What to type at each station</h2>
