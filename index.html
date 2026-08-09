@@ -80,7 +80,7 @@
   <img src="magpies-banner.png" alt="Two magpies" style="max-width:220px; width:100%; height:auto;">
 </div>
 <h1 style="text-align:center;"><span class="brand-dot"></span>Two for Joy Trail</h1>
-<p class="sub" style="text-align:center;">Ten stations. Seven teams. One lockbox waiting to be cracked. Let's cause some chaos.</p>
+<p class="sub" style="text-align:center;">Ten stations. Seven teams. One shared goal, we're all in this together. Let's cause some chaos.</p>
 <div id="photoLinkBar"></div>
 
 <div id="storageBanner" style="display:none; background:#fff3cd; color:#664d03; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
@@ -213,6 +213,21 @@ const FIREBASE_DB_URL = "https://two-for-joy-trail-default-rtdb.europe-west1.fir
 // Drive folder anyone-with-link-can-upload-to, and paste that link here. Leave the
 // placeholder in place to hide the photo link entirely until you've set one up.
 const PHOTO_ALBUM_URL = "https://drive.google.com/drive/folders/1_rJ5BruC2Tuw3_3n_DwHZc_GUxfpRA0-?usp=sharing";
+
+// ---- Optional: direct WhatsApp links for "need help" moments ----
+// wa.me only supports one recipient per link, so each contact gets their own.
+// Numbers use international format, digits only, no + or spaces.
+const WHATSAPP_CONTACTS = [
+  { name: "Henry", number: "447584419392" },
+  { name: "Caro", number: "447795098389" },
+];
+const WHATSAPP_MESSAGE = "Hi! We need a hand with the Two for Joy Trail game.";
+
+function whatsappLinks() {
+  return WHATSAPP_CONTACTS
+    .filter(c => c.number && !c.number.startsWith('PASTE_YOUR'))
+    .map(c => ({ name: c.name, url: `https://wa.me/${c.number}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}` }));
+}
 
 // Generic storage backed by Firebase Realtime Database's REST API, with a
 // local in-memory cache as a same-session safety net if a call ever fails.
@@ -884,11 +899,18 @@ async function reallyResetAllData() {
 function renderPhotoLink() {
   const el = document.getElementById('photoLinkBar');
   if (!el) return;
-  if (!PHOTO_ALBUM_URL || PHOTO_ALBUM_URL.startsWith('PASTE_YOUR')) return;
+  const hasPhoto = PHOTO_ALBUM_URL && !PHOTO_ALBUM_URL.startsWith('PASTE_YOUR');
+  const links = whatsappLinks();
+  if (!hasPhoto && links.length === 0) return;
   el.innerHTML = `<div class="card" style="text-align:center;">
-    <a href="${PHOTO_ALBUM_URL}" target="_blank" rel="noopener" style="text-decoration:none; font-weight:600; color:var(--teal);">
+    ${hasPhoto ? `<a href="${PHOTO_ALBUM_URL}" target="_blank" rel="noopener" style="text-decoration:none; font-weight:600; color:var(--teal); display:block;">
       \u{1F4F7} Share your team's photos &amp; videos here
-    </a>
+    </a>` : ''}
+    ${links.length > 0 ? `<div style="${hasPhoto ? 'margin-top:6px;' : ''}">
+      <span class="sub">Need help? Message </span>
+      ${links.map((l, i) => `<a href="${l.url}" target="_blank" rel="noopener" style="text-decoration:none; font-weight:600; color:var(--teal);">${l.name}</a>${i < links.length - 1 ? '<span class="sub"> or </span>' : ''}`).join('')}
+      <span class="sub"> on WhatsApp</span>
+    </div>` : ''}
   </div>`;
 }
 
@@ -902,6 +924,9 @@ function renderRules() {
 
   el.innerHTML = `
     <h2>How this all works</h2>
+    <div class="card locked" style="border-color:var(--gold); background:#fff8ec;">
+      <p><strong>This bit isn't a competition.</strong> All 7 teams are working towards the exact same goal, together, we've just split you up so you're not all crammed onto one station at once. There's no winning or losing here, just one big group effort split into smaller pieces. Save your competitive streak, there's a proper head-to-head after the box is found.</p>
+    </div>
     <div class="card">
       <p><strong>1. Pick your team.</strong> Open Team view and choose your team's name, one phone per team is all you need.</p>
       <p><strong>2. Visit your stations.</strong> The app tells you which station to head to next after each one, every team's order is different, so you won't all be queuing at the same spot.</p>
@@ -923,6 +948,7 @@ function renderRules() {
 
     <div class="card">
       <p class="sub">Stuck, confused, or the app's gone quiet? Find Caro & Henry, we'd honestly love the excuse to come and see how you're getting on.</p>
+      ${whatsappLinks().map(l => `<a href="${l.url}" target="_blank" rel="noopener" style="display:block; text-align:center; text-decoration:none; font-weight:600; color:var(--teal); margin-top:6px;">\u{1F4AC} Message ${l.name} on WhatsApp</a>`).join('')}
     </div>
   `;
 }
