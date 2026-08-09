@@ -849,6 +849,13 @@ async function renderOrg() {
       <button onclick="saveOrgSettings()">Save answer key</button>
       <div class="msg" id="settingsMsg"></div>
     </div>
+
+    <h2>Offline backup</h2>
+    <div class="card">
+      <p class="sub">Generates a printable page from whatever the answer key above currently says, right now, live. Save it as a PDF or print it, and you've got an always-current paper backup with no need to come back here.</p>
+      <button class="secondary" onclick="printOfflineBackup()">Generate printable backup page</button>
+    </div>
+
     <h2>Reset</h2>
     <div class="card">
       <p class="sub">Clears every team's progress and the Combine state, for everyone. Use this between test runs, or before the real event starts.</p>
@@ -909,6 +916,73 @@ async function reallyResetAllData() {
   await renderOrg();
   const msgEl = document.getElementById('resetMsg');
   if (msgEl) { msgEl.className = 'msg ok'; msgEl.textContent = 'All data reset.'; }
+}
+
+async function printOfflineBackup() {
+  const settings = await getSettings();
+  const allProgress = await Promise.all(TEAMS.map(team => getProgress(team.name)));
+
+  const exactStations = STATIONS.filter(s => s.validation.type === 'exact');
+
+  let teamSections = '';
+  TEAMS.forEach((team, i) => {
+    const progress = allProgress[i];
+    let rows = '';
+    team.route.forEach((stationId, stopIdx) => {
+      const station = STATIONS.find(s => s.id === stationId);
+      const letter = team.stationLetterMap[stationId] || 'no letter';
+      rows += `<tr><td>${stopIdx + 1}</td><td>Station ${stationId}</td><td>${station.title}</td><td><strong>${letter}</strong></td></tr>`;
+    });
+    teamSections += `
+      <h3>${team.name} <span style="color:#1f6f8f;">Target word: ${team.target}${team.kind === 'number' ? ' (digit ' + team.digit + ')' : ''}</span></h3>
+      <table>
+        <tr><th>Stop</th><th>Station</th><th>Task</th><th>Letter?</th></tr>
+        ${rows}
+      </table>`;
+  });
+
+  let riddleSection = '';
+  exactStations.forEach(s => {
+    riddleSection += `<p>${s.title} (Station ${s.id}): <strong>${s.validation.answer}</strong></p>`;
+  });
+
+  const generatedAt = new Date().toLocaleString('en-GB');
+
+  const doc = `
+    <html><head><title>Two for Joy Trail - Offline Backup</title>
+    <style>
+      body { font-family: -apple-system, Arial, sans-serif; color: #17181a; padding: 20px; max-width: 800px; margin: 0 auto; }
+      h1 { margin-bottom: 0; }
+      .private { color: #8a1f1f; font-weight: bold; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+      th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #ddd; }
+      .answers { border: 2px solid #8a1f1f; padding: 12px; margin-top: 20px; }
+      @media print { button { display: none; } }
+    </style>
+    </head><body>
+      <p class="private">PRIVATE, ORGANISER ONLY, DO NOT SHOW TO TEAMS</p>
+      <h1>Two for Joy Trail</h1>
+      <p>Offline backup, generated live from current settings on ${generatedAt}</p>
+      <button onclick="window.print()">Print / Save as PDF</button>
+      <h2>Riddle &amp; puzzle answers</h2>
+      ${riddleSection}
+      <div class="answers">
+        <h2 style="margin-top:0;">Combine answers</h2>
+        <p><strong>What3words:</strong> ///${settings.w3wAddress}</p>
+        <p><strong>Word order:</strong> ${settings.correctWordOrder.join(' \u2192 ')}</p>
+        <p><strong>Digit order:</strong> ${settings.correctDigitOrder.join(' \u2192 ')}</p>
+        <p><strong>Lockbox code:</strong> ${settings.correctDigitOrder.join('')}</p>
+      </div>
+      <h2>Team routes &amp; letters</h2>
+      ${teamSections}
+    </body></html>
+  `;
+
+  const printWin = window.open('', '_blank');
+  if (!printWin) { alert('Please allow pop-ups to generate the backup page.'); return; }
+  printWin.document.write(doc);
+  printWin.document.close();
+  printWin.focus();
 }
 
 function renderPhotoLink() {
