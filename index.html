@@ -223,10 +223,23 @@ const WHATSAPP_CONTACTS = [
 ];
 const WHATSAPP_MESSAGE = "Hi! We need a hand with the Two for Joy Trail game.";
 
+function currentStationContext() {
+  if (!currentTeam || !currentTeamProgress) return null;
+  const team = TEAMS.find(t => t.name === currentTeam);
+  const progress = currentTeamProgress;
+  if (progress.solved) return `${currentTeam} has already solved their word.`;
+  if (progress.stopIndex >= 10) return `${currentTeam} is unscrambling their word.`;
+  const stationNum = team.route[progress.stopIndex];
+  const station = STATIONS.find(s => s.id === stationNum);
+  return `${currentTeam} needs help at Station ${stationNum} (${station.title}).`;
+}
+
 function whatsappLinks() {
+  const context = currentStationContext();
+  const message = WHATSAPP_MESSAGE + (context ? ' ' + context : '');
   return WHATSAPP_CONTACTS
     .filter(c => c.number && !c.number.startsWith('PASTE_YOUR'))
-    .map(c => ({ name: c.name, url: `https://wa.me/${c.number}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}` }));
+    .map(c => ({ name: c.name, url: `https://wa.me/${c.number}?text=${encodeURIComponent(message)}` }));
 }
 
 // Generic storage backed by Firebase Realtime Database's REST API, with a
@@ -470,6 +483,7 @@ async function renderTeam() {
       <button onclick="dismissResult()">Continue</button>
     </div>`;
     container.innerHTML = html;
+    renderPhotoLink();
     return;
   }
 
@@ -504,6 +518,7 @@ async function renderTeam() {
   }
 
   container.innerHTML = html;
+  renderPhotoLink();
 }
 
 function dismissResult() {
