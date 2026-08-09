@@ -151,14 +151,16 @@ function validateAnswer(station, rawVal) {
 
 // ---- Config: 7 teams. 3 build what3words words, 4 build digit-words for a 4 digit code ----
 const TEAMS_RAW = [
-  { name: "One for Sorrow",     kind: "number", target: "SEVEN", digit: 7, hint: "A lucky number for some" },
-  { name: "Two for Joy",        kind: "number", target: "THREE", digit: 3, hint: "Legs in that relay race, sort of" },
-  { name: "Three for a Girl",   kind: "word",   target: "ACCENT",    hint: "Changes depending on where in the world you're from" },
-  { name: "Four for a Boy",     kind: "word",   target: "ENCOURAGE", hint: "What you do when you cheer someone on" },
-  { name: "Five for Silver",    kind: "word",   target: "SWITCHED",  hint: "Past tense of flipping something over" },
-  { name: "Six for Gold",       kind: "number", target: "NINE",  digit: 9, hint: "One short of a perfect round number" },
-  { name: "Seven for a Secret", kind: "number", target: "FIVE",  digit: 5, hint: "Fingers on one hand" },
+  { name: "One for Sorrow",     kind: "number", hint: "A lucky number for some" },
+  { name: "Two for Joy",        kind: "number", hint: "Legs in that relay race, sort of" },
+  { name: "Three for a Girl",   kind: "word",   hint: "Changes depending on where in the world you're from" },
+  { name: "Four for a Boy",     kind: "word",   hint: "What you do when you cheer someone on" },
+  { name: "Five for Silver",    kind: "word",   hint: "Past tense of flipping something over" },
+  { name: "Six for Gold",       kind: "number", hint: "One short of a perfect round number" },
+  { name: "Seven for a Secret", kind: "number", hint: "Fingers on one hand" },
 ];
+
+const DIGIT_WORDS = ["ZERO","ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN","EIGHT","NINE"];
 
 // ---- Default answer key, editable later from Organiser settings ----
 const DEFAULT_SETTINGS = {
@@ -184,24 +186,41 @@ function seededShuffle(arr, seedStr) {
   return a;
 }
 
-// ---- Build each team's route and letter-station map ----
-const TEAMS = TEAMS_RAW.map((team, teamIndex) => {
-  const route = [];
-  for (let k = 0; k < 10; k++) { route.push(((teamIndex + k) % 10) + 1); }
-  const L = team.target.length;
-  // Spread the L letter-stops evenly across the 10-stop route rather than
-  // clustering them at the start, so letters and fillers are staggered.
-  const routePositions = [];
-  for (let i = 0; i < L; i++) { routePositions.push(Math.floor(i * 10 / L)); }
-  const letterOrder = seededShuffle([...Array(L).keys()], team.name + '-order');
-  const stationLetterMap = {};
-  for (let i = 0; i < L; i++) {
-    const stationNum = route[routePositions[i]];
-    const letterIdx = letterOrder[i];
-    stationLetterMap[stationNum] = team.target[letterIdx];
-  }
-  return { ...team, route, wordLength: L, stationLetterMap };
-});
+// ---- Build each team's target, route, and letter-station map from the
+// current answer key settings, so changing the words/digits in Organiser
+// genuinely changes what teams collect, not just the final reveal order.
+function buildTeams(settings) {
+  let wordIdx = 0, numberIdx = 0;
+  return TEAMS_RAW.map((team, teamIndex) => {
+    let target, digit;
+    if (team.kind === 'word') {
+      target = settings.correctWordOrder[wordIdx];
+      wordIdx++;
+    } else {
+      digit = settings.correctDigitOrder[numberIdx];
+      target = DIGIT_WORDS[digit];
+      numberIdx++;
+    }
+
+    const route = [];
+    for (let k = 0; k < 10; k++) { route.push(((teamIndex + k) % 10) + 1); }
+    const L = target.length;
+    // Spread the L letter-stops evenly across the 10-stop route rather than
+    // clustering them at the start, so letters and fillers are staggered.
+    const routePositions = [];
+    for (let i = 0; i < L; i++) { routePositions.push(Math.floor(i * 10 / L)); }
+    const letterOrder = seededShuffle([...Array(L).keys()], team.name + '-order');
+    const stationLetterMap = {};
+    for (let i = 0; i < L; i++) {
+      const stationNum = route[routePositions[i]];
+      const letterIdx = letterOrder[i];
+      stationLetterMap[stationNum] = target[letterIdx];
+    }
+    return { ...team, target, digit, route, wordLength: L, stationLetterMap };
+  });
+}
+
+let TEAMS = [];
 
 function slug(s) { return s.toLowerCase().replace(/\s+/g, '-'); }
 
@@ -869,7 +888,7 @@ async function renderOrg() {
 
     <h2>Reset</h2>
     <div class="card">
-      <p class="sub">Clears every team's progress and the Combine state, for everyone. Use this between test runs, or before the real event starts.</p>
+      <p class="sub">Clears every team's progress and the Combine state, for everyone. Your answer key (words, digits, address) is kept as-is. Use this between test runs, or before the real event starts.</p>
       ${resetConfirming
         ? `<p><strong>Are you sure?</strong> This can't be undone.</p>
            <button onclick="reallyResetAllData()" style="background:#b3261e;">Yes, reset everything</button>
@@ -890,8 +909,14 @@ async function saveOrgSettings() {
 
   const settings = { w3wAddress: w3w, correctWordOrder: wordOrder, correctDigitOrder: digitOrder };
   const ok = await saveSettings(settings);
+  if (ok) {
+    TEAMS = buildTeams(settings);
+    currentTeamProgress = null; // force a fresh reload for whichever team is open
+  }
   msgEl.className = ok ? 'msg ok' : 'msg error';
-  msgEl.textContent = ok ? 'Saved.' : 'Could not save, try again.';
+  msgEl.textContent = ok
+    ? 'Saved, and teams are now spelling out these new words/digits. If any team has already collected letters, hit Reset all data below so their progress matches the new answers.'
+    : 'Could not save, try again.';
 }
 
 let resetConfirming = false;
@@ -908,7 +933,7 @@ function cancelReset() {
 
 async function reallyResetAllData() {
   const keys = TEAMS.map(t => 'trail:progress:' + slug(t.name))
-    .concat(['trail:settings', 'trail:combine']);
+    .concat(['trail:combine']);
 
   for (const key of keys) {
     await storeDelete(key);
@@ -1053,8 +1078,13 @@ function renderRules() {
   `;
 }
 
-populateTeamSelect();
-renderPhotoLink();
+async function initApp() {
+  const settings = await getSettings();
+  TEAMS = buildTeams(settings);
+  populateTeamSelect();
+  renderPhotoLink();
+}
+initApp();
 </script>
 </body>
 </html>
