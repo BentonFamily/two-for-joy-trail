@@ -424,6 +424,17 @@ function stopOrgPolling() {
   if (orgPollHandle) { clearInterval(orgPollHandle); orgPollHandle = null; }
 }
 
+function resumeOrgPollingIfIdle() {
+  // Small delay so tabbing between settings fields doesn't briefly resume
+  // polling (and wipe the next field) in the gap between blur and focus.
+  setTimeout(() => {
+    const settingsFieldIds = ['settingW3w', 'settingWordOrder', 'settingDigitOrder'];
+    const active = document.activeElement;
+    if (active && settingsFieldIds.includes(active.id)) return;
+    if (orgUnlocked) startOrgPolling();
+  }, 250);
+}
+
 function checkOrgPasscode() {
   const val = document.getElementById('orgPasscodeInput').value;
   if (val === ORG_PASSCODE) {
@@ -841,11 +852,11 @@ async function renderOrg() {
     ${settings.correctDigitOrder.join('') === '7395' ? `<div class="card locked"><strong>Reminder:</strong> the digit order below is still the placeholder (7395). Set your real 4-digit code before the day.</div>` : ''}
     <div class="card">
       <label>What3words address</label>
-      <input type="text" id="settingW3w" value="${settings.w3wAddress}">
+      <input type="text" id="settingW3w" value="${settings.w3wAddress}" onfocus="stopOrgPolling()" onblur="resumeOrgPollingIfIdle()">
       <label>Word order (comma separated)</label>
-      <input type="text" id="settingWordOrder" value="${settings.correctWordOrder.join(',')}">
+      <input type="text" id="settingWordOrder" value="${settings.correctWordOrder.join(',')}" onfocus="stopOrgPolling()" onblur="resumeOrgPollingIfIdle()">
       <label>Digit order (4 digits, no spaces)</label>
-      <input type="text" id="settingDigitOrder" value="${settings.correctDigitOrder.join('')}">
+      <input type="text" id="settingDigitOrder" value="${settings.correctDigitOrder.join('')}" onfocus="stopOrgPolling()" onblur="resumeOrgPollingIfIdle()">
       <button onclick="saveOrgSettings()">Save answer key</button>
       <div class="msg" id="settingsMsg"></div>
     </div>
