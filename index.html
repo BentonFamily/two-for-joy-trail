@@ -117,7 +117,7 @@
 <div id="orgView" style="display:none;">
   <div id="orgGate">
     <h2>Organiser access</h2>
-    <input type="text" id="orgPasscodeInput" placeholder="Enter organiser passcode">
+    <input type="text" id="orgPasscodeInput" placeholder="Enter organiser passcode" autocapitalize="characters" onkeydown="if (event.key === 'Enter') checkOrgPasscode()">
     <button onclick="checkOrgPasscode()">Unlock</button>
     <div class="msg error" id="orgGateMsg"></div>
   </div>
@@ -479,7 +479,7 @@ function resumeOrgPollingIfIdle() {
 
 function checkOrgPasscode() {
   const val = document.getElementById('orgPasscodeInput').value;
-  if (val === ORG_PASSCODE) {
+  if (val.trim().toUpperCase() === ORG_PASSCODE.toUpperCase()) {
     orgUnlocked = true;
     renderOrgGate();
     renderOrg();
@@ -562,8 +562,11 @@ async function renderTeam() {
     const stationNum = team.route[progress.stopIndex];
     const station = STATIONS.find(s => s.id === stationNum);
     const priorWrong = (progress.wrongAttempts && progress.wrongAttempts[stationNum]) || 0;
+    const [mapVisible, mapLocations] = await Promise.all([getMapVisible(), getStationLocations()]);
+    const showMapLink = mapVisible && mapLocations[stationNum] && mapLocations[stationNum].lat;
     html += `<div class="card">
       <div><span class="station-num">${stationNum}</span> <strong>${station.title}</strong></div>
+      ${showMapLink ? `<button class="secondary" onclick="goToStationOnMap(${stationNum})">\u{1F4CD} Show Station ${stationNum} on the map</button>` : ''}
       <input type="text" id="stationInput" placeholder="${station.prompt}">
       <button onclick="submitStation(${stationNum})">Submit</button>
       <button class="test" onclick="testFillStation(${stationNum})">Test: fill correct answer</button>
