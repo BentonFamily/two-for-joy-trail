@@ -533,6 +533,7 @@ async function renderTeam() {
       ${lastResult.nextStationNum
         ? `<p><strong>Head to Station ${lastResult.nextStationNum} next.</strong></p>`
         : `<p><strong>That's all 10 stations, time to unscramble your word.</strong></p>`}
+      ${lastResult.nextStationMapLink ? `<button class="secondary" onclick="goToStationOnMap(${lastResult.nextStationMapLink})">\u{1F4CD} Show Station ${lastResult.nextStationMapLink} on the map</button>` : ''}
       <button onclick="dismissResult()">Continue</button>
     </div>`;
     container.innerHTML = html;
@@ -657,7 +658,14 @@ async function submitStation(stationNum) {
     const ok = await saveProgress(currentTeam, progress);
     if (!ok) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
     const nextStationNum = progress.stopIndex < 10 ? team.route[progress.stopIndex] : null;
-    lastResult = { letter: letter || null, stationNum, nextStationNum };
+    let nextStationMapLink = null;
+    if (nextStationNum) {
+      const [mapVisible, locations] = await Promise.all([getMapVisible(), getStationLocations()]);
+      if (mapVisible && locations[nextStationNum] && locations[nextStationNum].lat) {
+        nextStationMapLink = nextStationNum;
+      }
+    }
+    lastResult = { letter: letter || null, stationNum, nextStationNum, nextStationMapLink };
     if (letter) celebrate(false);
     await renderTeam();
   } finally {
@@ -1125,6 +1133,12 @@ function renderPhotoLink() {
 }
 
 let leafletMap = null;
+let mapFocusStationId = null;
+
+function goToStationOnMap(stationId) {
+  mapFocusStationId = stationId;
+  setTab('map');
+}
 
 async function renderMap() {
   const messageEl = document.getElementById('mapMessage');
@@ -1152,14 +1166,21 @@ async function renderMap() {
   }).addTo(leafletMap);
 
   const bounds = [];
+  const markersById = {};
   entries.forEach(loc => {
     const station = STATIONS.find(s => s.id === loc.id);
     const marker = L.marker([loc.lat, loc.lon]).addTo(leafletMap);
     marker.bindPopup(`<strong>Station ${loc.id}</strong><br>${station ? station.title : ''}`);
+    markersById[loc.id] = marker;
     bounds.push([loc.lat, loc.lon]);
   });
 
-  if (bounds.length === 1) {
+  const focusEntry = mapFocusStationId ? entries.find(e => e.id === mapFocusStationId) : null;
+  if (focusEntry) {
+    leafletMap.setView([focusEntry.lat, focusEntry.lon], 18);
+    markersById[focusEntry.id].openPopup();
+    mapFocusStationId = null;
+  } else if (bounds.length === 1) {
     leafletMap.setView(bounds[0], 17);
   } else {
     leafletMap.fitBounds(bounds, { padding: [30, 30] });
