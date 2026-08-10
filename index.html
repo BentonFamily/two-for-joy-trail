@@ -1029,6 +1029,12 @@ async function renderOrg() {
       <div class="msg" id="settingsMsg"></div>
     </div>
 
+    <h2>Trail recap</h2>
+    <div class="card">
+      <p class="sub">A fun, shareable "how it went" page, built live from everything captured today, mottos, solved words, poems, questions, the lot. Best generated once the day's actually done, but works any time.</p>
+      <button class="secondary" onclick="generateTrailRecap()">Generate trail recap</button>
+    </div>
+
     <h2>Offline backup</h2>
     <div class="card">
       <p class="sub">Generates a printable page from whatever the answer key above currently says, right now, live. Save it as a PDF or print it, and you've got an always-current paper backup with no need to come back here.</p>
@@ -1153,6 +1159,82 @@ async function reallyResetAllData() {
   await renderOrg();
   const msgEl = document.getElementById('resetMsg');
   if (msgEl) { msgEl.className = 'msg ok'; msgEl.textContent = 'All data reset.'; }
+}
+
+async function generateTrailRecap() {
+  const [settings, combineState, allProgress] = await Promise.all([
+    getSettings(),
+    getCombineState(),
+    Promise.all(TEAMS.map(team => getProgress(team.name)))
+  ]);
+
+  const textStationIds = STATIONS.filter(s => s.validation.type === 'text').map(s => s.id);
+  const totalLetters = allProgress.reduce((sum, p) => sum + p.collected.length, 0);
+  const totalStops = allProgress.reduce((sum, p) => sum + (p.solved ? 10 : p.stopIndex), 0);
+  const boxFound = combineState.wordOrderSolved && combineState.digitOrderSolved;
+
+  let teamSections = '';
+  TEAMS.forEach((team, i) => {
+    const progress = allProgress[i];
+    const responses = progress.textResponses || {};
+    const entries = textStationIds
+      .filter(id => responses[id])
+      .map(id => ({ title: STATIONS.find(s => s.id === id).title, val: responses[id] }));
+
+    teamSections += `
+      <div class="team-card">
+        <h3>${team.name}</h3>
+        ${progress.motto ? `<p class="motto">"${progress.motto}"</p>` : ''}
+        <p>${progress.solved
+          ? `Solved their word: <strong>${team.target}</strong>`
+          : 'Didn\u2019t quite finish solving their word'}</p>
+        ${entries.map(e => `<p><em>${e.title}:</em> ${e.val}</p>`).join('')}
+      </div>`;
+  });
+
+  const generatedAt = new Date().toLocaleString('en-GB');
+
+  const doc = `
+    <html><head><title>Two for Joy Trail - The Story</title>
+    <style>
+      body { font-family: -apple-system, Arial, sans-serif; color: #17181a; background: #faf7f2; padding: 24px; max-width: 800px; margin: 0 auto; }
+      h1 { margin-bottom: 4px; }
+      h2 { color: #3a3f8f; margin-top: 28px; }
+      .stats { border: 2px solid #e8a33d; background: #fff8ec; border-radius: 8px; padding: 14px 18px; margin: 16px 0; }
+      .result { border: 2px solid #1f6f8f; background: #eaf5f5; border-radius: 8px; padding: 14px 18px; margin: 16px 0; }
+      .team-card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; background: #fff; }
+      .motto { font-style: italic; color: #1f6f8f; margin: 2px 0 8px; }
+      button { background: linear-gradient(135deg, #1a5f5a, #1f6f8f 55%, #3a3f8f); color: #fff; border: none; padding: 10px 16px; border-radius: 6px; font-size: 15px; }
+      @media print { button { display: none; } }
+    </style>
+    </head><body>
+      <h1>Two for Joy Trail: The Story</h1>
+      <p>Generated ${generatedAt}</p>
+      <button onclick="window.print()">Print / Save as PDF</button>
+
+      <div class="stats">
+        <strong>Trail vibes</strong>
+        <p>\u{1F5FC}\uFE0F ${totalLetters} letters collected across all 7 teams</p>
+        <p>\u{1F6A9} ${totalStops} station visits completed as a group</p>
+      </div>
+
+      <div class="result">
+        <strong>The finale</strong>
+        <p>${boxFound
+          ? `The box was found! Location: ///${settings.w3wAddress}, code ${settings.correctDigitOrder.join('')}.`
+          : 'The box hunt wrapped up before the final combination was cracked, still a brilliant afternoon of letter collecting either way.'}</p>
+      </div>
+
+      <h2>Every team's trail</h2>
+      ${teamSections}
+    </body></html>
+  `;
+
+  const recapWin = window.open('', '_blank');
+  if (!recapWin) { alert('Please allow pop-ups to generate the recap.'); return; }
+  recapWin.document.write(doc);
+  recapWin.document.close();
+  recapWin.focus();
 }
 
 async function printOfflineBackup() {
