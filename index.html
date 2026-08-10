@@ -73,6 +73,8 @@
     100% { transform: translateY(105vh) rotate(360deg); opacity: 0.4; }
   }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -89,7 +91,13 @@
   <button id="tabTeam" onclick="setTab('team')">Team view</button>
   <button id="tabCombine" class="secondary" onclick="setTab('combine')">Combine</button>
   <button id="tabRules" class="secondary" onclick="setTab('rules')">Rules</button>
+  <button id="tabMap" class="secondary" onclick="setTab('map')">Map</button>
   <button id="tabOrg" class="secondary" onclick="setTab('org')">Organiser</button>
+</div>
+
+<div id="mapView" style="display:none;">
+  <div id="mapMessage"></div>
+  <div id="mapContainer" style="height:400px; border-radius:8px; margin-bottom:12px; display:none;"></div>
 </div>
 
 <div id="rulesView" style="display:none;">
@@ -356,6 +364,18 @@ async function getSettings() {
 async function saveSettings(settings) {
   return storeSet('trail:settings', settings);
 }
+async function getStationLocations() {
+  return storeGet('trail:locations', {});
+}
+async function saveStationLocations(locations) {
+  return storeSet('trail:locations', locations);
+}
+async function getMapVisible() {
+  return storeGet('trail:mapVisible', false);
+}
+async function setMapVisible(visible) {
+  return storeSet('trail:mapVisible', visible);
+}
 async function getCombineState() {
   return storeGet('trail:combine', { wordOrderSolved: false, digitOrderSolved: false });
 }
@@ -416,13 +436,16 @@ function setTab(tab) {
   document.getElementById('teamView').style.display = tab === 'team' ? 'block' : 'none';
   document.getElementById('combineView').style.display = tab === 'combine' ? 'block' : 'none';
   document.getElementById('rulesView').style.display = tab === 'rules' ? 'block' : 'none';
+  document.getElementById('mapView').style.display = tab === 'map' ? 'block' : 'none';
   document.getElementById('orgView').style.display = tab === 'org' ? 'block' : 'none';
   document.getElementById('tabTeam').className = tab === 'team' ? '' : 'secondary';
   document.getElementById('tabCombine').className = tab === 'combine' ? '' : 'secondary';
   document.getElementById('tabRules').className = tab === 'rules' ? '' : 'secondary';
+  document.getElementById('tabMap').className = tab === 'map' ? '' : 'secondary';
   document.getElementById('tabOrg').className = tab === 'org' ? '' : 'secondary';
   if (tab === 'combine') renderCombine();
   if (tab === 'rules') renderRules();
+  if (tab === 'map') renderMap();
   if (tab === 'org') renderOrgGate();
   stopOrgPolling();
   if (tab === 'org' && orgUnlocked) startOrgPolling();
@@ -444,12 +467,12 @@ function stopOrgPolling() {
 }
 
 function resumeOrgPollingIfIdle() {
-  // Small delay so tabbing between settings fields doesn't briefly resume
+  // Small delay so tabbing between fields doesn't briefly resume
   // polling (and wipe the next field) in the gap between blur and focus.
   setTimeout(() => {
-    const settingsFieldIds = ['settingW3w', 'settingWordOrder', 'settingDigitOrder'];
     const active = document.activeElement;
-    if (active && settingsFieldIds.includes(active.id)) return;
+    const isTypingField = active && active.tagName === 'INPUT' && active.closest('#orgContent');
+    if (isTypingField) return;
     if (orgUnlocked) startOrgPolling();
   }, 250);
 }
@@ -806,9 +829,11 @@ async function renderOrg() {
   const container = document.getElementById('orgContent');
   if (!container.dataset.loadedOnce) { container.innerHTML = '<p>Loading...</p>'; }
 
-  const [settings, allProgress] = await Promise.all([
+  const [settings, allProgress, stationLocations, mapVisible] = await Promise.all([
     getSettings(),
-    Promise.all(TEAMS.map(team => getProgress(team.name)))
+    Promise.all(TEAMS.map(team => getProgress(team.name))),
+    getStationLocations(),
+    getMapVisible()
   ]);
 
   let rows = '';
@@ -894,6 +919,24 @@ async function renderOrg() {
       <button class="secondary" onclick="printOfflineBackup()">Generate printable backup page</button>
     </div>
 
+    <h2>Station map</h2>
+    <div class="card">
+      <p class="sub">Whether guests can see the Map tab at all right now:</p>
+      <button class="${mapVisible ? '' : 'secondary'}" onclick="toggleMapVisible(${!mapVisible})" style="${mapVisible ? '' : 'border-color:#999; color:#999;'}">
+        Map tab is currently ${mapVisible ? 'VISIBLE to everyone' : 'HIDDEN from everyone'}, tap to ${mapVisible ? 'hide' : 'show'} it
+      </button>
+      <button class="secondary" onclick="setTab('map')">Preview map (just for you, works either way)</button>
+      <p class="sub" style="margin-top:10px;">On Google Maps, long-press a spot to drop a pin, it shows you the coordinates, tap to copy. Paste that in below for each station you've locked in. Once the toggle above is on, this updates live for everyone, handy if a team can't find a station.</p>
+      ${STATIONS.map(s => {
+        const loc = stationLocations[s.id];
+        const val = loc && loc.lat ? `${loc.lat}, ${loc.lon}` : '';
+        return `<label>Station ${s.id}: ${s.title}</label>
+          <input type="text" id="loc-${s.id}" placeholder="e.g. 52.0367, 0.7231" value="${val}" onfocus="stopOrgPolling()" onblur="resumeOrgPollingIfIdle()">`;
+      }).join('')}
+      <button onclick="saveStationLocationsFromForm()">Save station locations</button>
+      <div class="msg" id="locationsMsg"></div>
+    </div>
+
     <h2>Reset</h2>
     <div class="card">
       <p class="sub">Clears every team's progress and the Combine state, for everyone. Your answer key (words, digits, address) is kept as-is. Use this between test runs, or before the real event starts.</p>
@@ -907,6 +950,40 @@ async function renderOrg() {
 
   container.innerHTML = html;
   container.dataset.loadedOnce = 'true';
+}
+
+async function toggleMapVisible(newValue) {
+  await setMapVisible(newValue);
+  const tabMapEl = document.getElementById('tabMap');
+  if (tabMapEl) tabMapEl.style.display = newValue ? '' : 'none';
+  await renderOrg();
+}
+
+async function saveStationLocationsFromForm() {
+  const msgEl = document.getElementById('locationsMsg');
+  const locations = {};
+  let hadError = false;
+
+  STATIONS.forEach(s => {
+    const raw = (document.getElementById('loc-' + s.id).value || '').trim();
+    if (!raw) return;
+    const parts = raw.split(',').map(p => p.trim());
+    if (parts.length !== 2 || isNaN(Number(parts[0])) || isNaN(Number(parts[1]))) {
+      hadError = true;
+      return;
+    }
+    locations[s.id] = { lat: Number(parts[0]), lon: Number(parts[1]) };
+  });
+
+  if (hadError) {
+    msgEl.className = 'msg error';
+    msgEl.textContent = "One or more entries don't look like \"lat, lon\", e.g. 52.0367, 0.7231. Check and try again.";
+    return;
+  }
+
+  const ok = await saveStationLocations(locations);
+  msgEl.className = ok ? 'msg ok' : 'msg error';
+  msgEl.textContent = ok ? 'Saved, live on the Map tab now.' : 'Could not save, try again.';
 }
 
 async function saveOrgSettings() {
@@ -1047,6 +1124,49 @@ function renderPhotoLink() {
   </div>`;
 }
 
+let leafletMap = null;
+
+async function renderMap() {
+  const messageEl = document.getElementById('mapMessage');
+  const containerEl = document.getElementById('mapContainer');
+  const locations = await getStationLocations();
+  const entries = Object.keys(locations)
+    .map(id => ({ id: Number(id), ...locations[id] }))
+    .filter(loc => loc.lat && loc.lon)
+    .sort((a, b) => a.id - b.id);
+
+  if (entries.length === 0) {
+    containerEl.style.display = 'none';
+    messageEl.innerHTML = `<div class="card"><p class="sub">No station locations added yet. Once they're added in Organiser, they'll show up here for everyone, handy if you can't find a station in person.</p></div>`;
+    return;
+  }
+
+  messageEl.innerHTML = `<p class="sub">Tap a pin to see which station it is. This updates live as more get added.</p>`;
+  containerEl.style.display = 'block';
+
+  if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  leafletMap = L.map('mapContainer');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  const bounds = [];
+  entries.forEach(loc => {
+    const station = STATIONS.find(s => s.id === loc.id);
+    const marker = L.marker([loc.lat, loc.lon]).addTo(leafletMap);
+    marker.bindPopup(`<strong>Station ${loc.id}</strong><br>${station ? station.title : ''}`);
+    bounds.push([loc.lat, loc.lon]);
+  });
+
+  if (bounds.length === 1) {
+    leafletMap.setView(bounds[0], 17);
+  } else {
+    leafletMap.fitBounds(bounds, { padding: [30, 30] });
+  }
+}
+
+
 function renderRules() {
   const el = document.getElementById('rulesContent');
 
@@ -1092,6 +1212,8 @@ async function initApp() {
   TEAMS = buildTeams(settings);
   populateTeamSelect();
   renderPhotoLink();
+  const mapVisible = await getMapVisible();
+  document.getElementById('tabMap').style.display = mapVisible ? '' : 'none';
 }
 initApp();
 </script>
