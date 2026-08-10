@@ -405,6 +405,56 @@ function playChime(big) {
   } catch (e) { /* audio not available, silently skip */ }
 }
 
+function playWomp() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const notes = [196.00, 174.61]; // a comedic little descending "womp womp"
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      const startTime = ctx.currentTime + i * 0.22;
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.28);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.3);
+    });
+  } catch (e) { /* audio not available, silently skip */ }
+}
+
+const LETTER_FOUND_PHRASES = [
+  "The magpie approves.",
+  "Ooh, shiny.",
+  "One for the collection.",
+  "Excellent thievery.",
+  "Straight into the nest with that one.",
+  "The rhyme is pleased with you.",
+  "Tucked away safely. Magpies are like that.",
+];
+const NO_LETTER_PHRASES = [
+  "Nothing shiny here, on you go.",
+  "Not every stop's a treasure, off you pop.",
+  "No letter this time, but well played anyway.",
+  "The magpie shrugs. Onwards!",
+  "Empty handed, but your dignity's intact.",
+];
+const CERT_TITLES = [
+  "Certified Letter Detective",
+  "Official Magpie Liaison Officer",
+  "Master Codebreaker of Boxford Spinney",
+  "Grand Champion of Standing Around Looking Pleased",
+  "Distinguished Fellow of the Rhyme Society",
+  "Senior Nest Investigator",
+  "Chief Acorn Whisperer",
+  "Keeper of Shiny Things",
+];
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
 function celebrate(big) {
   playChime(big);
   const colours = ['#1f6f8f', '#3a3f8f', '#e8a33d', '#17181a', '#1a5f5a'];
@@ -528,8 +578,8 @@ async function renderTeam() {
     html += `<div class="card done">
       <h2>${lastResult.letter ? 'Correct!' : 'Well done!'}</h2>
       ${lastResult.letter
-        ? `<p>You found a letter: <span class="letter-tile">${lastResult.letter}</span></p>`
-        : `<p>No letter at this one.</p>`}
+        ? `<p>You found a letter: <span class="letter-tile">${lastResult.letter}</span></p><p class="sub">${pickRandom(LETTER_FOUND_PHRASES)}</p>`
+        : `<p>No letter at this one.</p><p class="sub">${pickRandom(NO_LETTER_PHRASES)}</p>`}
       ${lastResult.nextStationNum
         ? `<p><strong>Head to Station ${lastResult.nextStationNum} next.</strong></p>`
         : `<p><strong>That's all 10 stations, time to unscramble your word.</strong></p>`}
@@ -542,10 +592,17 @@ async function renderTeam() {
   }
 
   if (progress.solved) {
-    html += `<div class="card done">
-      <h2>Solved!</h2>
+    const certTitle = CERT_TITLES[TEAMS.indexOf(team) % CERT_TITLES.length];
+    html += `<div class="card done" style="border: 3px double var(--gold); background: linear-gradient(135deg, #fffdf7, #fff8ec); text-align: center; padding: 20px;">
+      <p style="font-size:11px; letter-spacing:2px; color:var(--gold); text-transform:uppercase; margin-bottom:4px;">Certificate of Achievement</p>
+      <h2 style="margin:4px 0;">Solved!</h2>
+      <p style="font-size:13px; color:#666; margin-bottom:2px;">This certifies that</p>
+      <p style="font-size:19px; font-weight:700; margin:2px 0;">${team.name}</p>
+      <p style="font-size:13px; color:#666; margin-bottom:2px;">has been officially crowned</p>
+      <p style="font-weight:700; color:var(--teal); margin:2px 0 14px;">${certTitle}</p>
       <p>Your word is <span class="letter-tile">${team.target}</span></p>
       <p class="sub">${team.kind === 'word' ? 'One of the three words in the what3words location. Head to the Combine tab to help place it in order.' : 'This spells the digit ' + team.digit + '. Head to the Combine tab to help place it in order.'}</p>
+      <p class="sub" style="margin-top:10px; font-style:italic;">\u{1F4F8} Screenshot this, you earned it.</p>
     </div>`;
   } else if (progress.stopIndex >= 10) {
     html += `<div class="card">
@@ -639,6 +696,7 @@ async function submitStation(stationNum) {
         msgEl.textContent = progress.wrongAttempts[stationNum] >= 3 && station.hint
           ? 'Not quite, try again. ' + station.hint
           : 'Not quite, try again.';
+        playWomp();
       } else {
         msgEl.className = 'msg error';
         msgEl.textContent = 'Please enter an answer to continue.';
@@ -688,6 +746,7 @@ async function submitUnscramble() {
     if (val !== team.target) {
       msgEl.className = 'msg error';
       msgEl.textContent = 'Not quite, try again.';
+      playWomp();
       return;
     }
 
@@ -815,6 +874,7 @@ async function checkWordOrder() {
   } else {
     msgEl.className = 'msg error';
     msgEl.textContent = 'Not quite that order, try again.';
+    playWomp();
   }
 }
 
@@ -832,6 +892,7 @@ async function checkDigitOrder() {
   } else {
     msgEl.className = 'msg error';
     msgEl.textContent = 'Not quite that order, try again.';
+    playWomp();
   }
 }
 
