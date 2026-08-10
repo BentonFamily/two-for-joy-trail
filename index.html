@@ -353,7 +353,7 @@ async function testBackendConnection() {
 }
 
 async function getProgress(teamName) {
-  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false, wrongAttempts: {}, textResponses: {} });
+  return storeGet('trail:progress:' + slug(teamName), { stopIndex: 0, collected: [], solved: false, wrongAttempts: {}, textResponses: {}, motto: '' });
 }
 async function saveProgress(teamName, progress) {
   return storeSet('trail:progress:' + slug(teamName), progress);
@@ -480,6 +480,7 @@ function celebrate(big) {
 }
 let currentTeam = null;
 let currentTeamProgress = null; // local cache for the active team, avoids a storage read before every submit
+let editingMotto = false;
 let orgUnlocked = false;
 
 function setTab(tab) {
@@ -550,10 +551,21 @@ function populateTeamSelect() {
     TEAMS.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
 }
 
+async function saveMotto() {
+  const val = (document.getElementById('mottoInput').value || '').trim();
+  if (!val) { editingMotto = false; await renderTeam(); return; }
+  const progress = currentTeamProgress;
+  progress.motto = val;
+  await saveProgress(currentTeam, progress);
+  editingMotto = false;
+  await renderTeam();
+}
+
 async function onTeamChange() {
   currentTeam = document.getElementById('teamSelect').value;
   lastResult = null;
   currentTeamProgress = null;
+  editingMotto = false;
   if (!currentTeam) { document.getElementById('teamContent').innerHTML = ''; return; }
   currentTeamProgress = await getProgress(currentTeam);
   await renderTeam();
@@ -570,6 +582,17 @@ async function renderTeam() {
   const pct = Math.round((progress.stopIndex / 10) * 100);
   let html = `<div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>`;
   html += `<p class="sub">${progress.stopIndex} of 10 stations done &middot; ${progress.collected.length} of ${team.wordLength} letters collected</p>`;
+
+  if (progress.motto) {
+    html += `<p style="text-align:center; font-style:italic; color:var(--teal); margin:0 0 10px;">"${progress.motto}" <a href="#" onclick="event.preventDefault(); editingMotto = true; renderTeam();" style="font-size:11px; color:#999;">(edit)</a></p>`;
+  } else if (editingMotto || progress.stopIndex === 0) {
+    html += `<div class="card">
+      <label>Give your team a motto (optional, but fun):</label>
+      <input type="text" id="mottoInput" placeholder="e.g. Slow but stylish" maxlength="60">
+      <button class="secondary" onclick="saveMotto()">Save motto</button>
+    </div>`;
+  }
+
   if (!progress.solved && !lastResult) {
     html += `<button class="test" onclick="testFastForwardTeam()">Test: fast-forward this whole team (1 storage write)</button>`;
   }
@@ -781,19 +804,40 @@ async function renderCombine() {
   const solvedWords = wordTeams.filter(w => w.progress.solved);
   const solvedNumbers = numberTeams.filter(n => n.progress.solved);
 
-  let html = '<h2>Word order</h2>';
+  function hasCompletedStation(team, progress, stationId) {
+    const completedCount = progress.solved ? 10 : progress.stopIndex;
+    return team.route.slice(0, completedCount).includes(stationId);
+  }
+  function countCompleted(stationId) {
+    return TEAMS.filter((t, i) => hasCompletedStation(t, allProgress[i], stationId)).length;
+  }
+  const totalLetters = allProgress.reduce((sum, p) => sum + p.collected.length, 0);
+  const totalStops = allProgress.reduce((sum, p) => sum + (p.solved ? 10 : p.stopIndex), 0);
+
+  let html = `<h2>Trail vibes</h2>
+    <div class="card" style="background:linear-gradient(135deg, #fffdf7, #fff8ec); border-color:var(--gold);">
+      <p class="sub">Not a leaderboard, just a nice snapshot of what the whole group's been up to.</p>
+      <p>\u{1F5FC}\uFE0F ${totalLetters} letters collected across all 7 teams</p>
+      <p>\u{1F6A9} ${totalStops} station visits completed as a group</p>
+      <p>\u{1F3D7}\uFE0F ${countCompleted(4)} towers built</p>
+      <p>\u{1F4DD} ${countCompleted(8)} poems written</p>
+      <p>\u2753 ${countCompleted(7)} questions or stories shared</p>
+      <p>\u{1F426} ${countCompleted(10)} magpie poses struck</p>
+    </div>
+
+    <h2>Word order</h2>`;
   html = '<button class="secondary" onclick="renderCombine()">Refresh</button>' + html;
   if (solvedWords.length < 3) {
     html += `<p class="sub">Waiting on ${3 - solvedWords.length} more team(s) to solve their word.</p>`;
     wordTeams.forEach(w => {
-      html += `<div class="card"><strong>${w.team.name}</strong>: ${w.progress.solved ? `<span class="letter-tile">${w.team.target}</span>` : 'not solved yet'}<div class="hint">${w.team.hint}</div></div>`;
+      html += `<div class="card"><strong>${w.team.name}</strong>: ${w.progress.solved ? `<span class="letter-tile">${w.team.target}</span>` : 'not solved yet'}</div>`;
     });
   } else if (combineState.wordOrderSolved) {
     html += `<div class="card done"><strong>Word order confirmed:</strong> ${settings.correctWordOrder.join(' &rarr; ')}</div>`;
   } else {
-    html += '<p class="sub">All three words are in. Use the clues to work out the order, then pick it below.</p>';
+    html += '<p class="sub">All three words are in. Work out the order as a group, then pick it below.</p>';
     solvedWords.forEach(w => {
-      html += `<div class="card"><strong>${w.team.target}</strong><div class="hint">${w.team.hint}</div></div>`;
+      html += `<div class="card"><strong>${w.team.target}</strong></div>`;
     });
     html += '<div class="card">';
     for (let i = 0; i < 3; i++) {
@@ -810,14 +854,14 @@ async function renderCombine() {
   if (solvedNumbers.length < 4) {
     html += `<p class="sub">Waiting on ${4 - solvedNumbers.length} more team(s) to solve their number.</p>`;
     numberTeams.forEach(n => {
-      html += `<div class="card"><strong>${n.team.name}</strong>: ${n.progress.solved ? `<span class="letter-tile">${n.team.target} = ${n.team.digit}</span>` : 'not solved yet'}<div class="hint">${n.team.hint}</div></div>`;
+      html += `<div class="card"><strong>${n.team.name}</strong>: ${n.progress.solved ? `<span class="letter-tile">${n.team.target} = ${n.team.digit}</span>` : 'not solved yet'}</div>`;
     });
   } else if (combineState.digitOrderSolved) {
     html += `<div class="card done"><strong>Digit order confirmed:</strong> ${settings.correctDigitOrder.join('')}</div>`;
   } else {
-    html += '<p class="sub">All four numbers are in. Use the clues to work out the order, then pick it below.</p>';
+    html += '<p class="sub">All four numbers are in. Work out the order as a group, then pick it below.</p>';
     solvedNumbers.forEach(n => {
-      html += `<div class="card"><strong>${n.team.target} = ${n.team.digit}</strong><div class="hint">${n.team.hint}</div></div>`;
+      html += `<div class="card"><strong>${n.team.target} = ${n.team.digit}</strong></div>`;
     });
     html += '<div class="card">';
     for (let i = 0; i < 4; i++) {
@@ -922,7 +966,7 @@ async function renderOrg() {
     const pct = Math.round((progress.stopIndex / 10) * 100);
     const barColour = progress.solved ? '#2e7d32' : 'var(--brand-gradient)';
     rows += `<tr>
-      <td>${team.name}</td><td>${team.kind}</td><td>${whereNow}</td>
+      <td>${team.name}${progress.motto ? `<br><span style="font-size:10px; color:#888; font-style:italic;">"${progress.motto}"</span>` : ''}</td><td>${team.kind}</td><td>${whereNow}</td>
       <td>
         <div style="font-size:11px; white-space:nowrap;">${progress.stopIndex}/10</div>
         <div style="background:#eee; border-radius:3px; height:6px; width:50px; overflow:hidden;">
