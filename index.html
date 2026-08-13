@@ -593,9 +593,6 @@ async function renderTeam() {
     </div>`;
   }
 
-  if (!progress.solved && !lastResult) {
-    html += `<button class="test" onclick="testFastForwardTeam()">Test: fast-forward this whole team (1 storage write)</button>`;
-  }
 
   if (lastResult) {
     html += `<div class="card done">
@@ -635,7 +632,6 @@ async function renderTeam() {
       <p class="sub">Rearrange them into a real word (${team.wordLength} letters) and type your answer below.</p>
       <input type="text" id="unscrambleInput" placeholder="Your answer">
       <button onclick="submitUnscramble()">Submit</button>
-      <button class="test" onclick="testFillUnscramble()">Test: fill correct answer</button>
       <div class="msg" id="unscrambleMsg"></div>
     </div>`;
   } else {
@@ -649,7 +645,6 @@ async function renderTeam() {
       ${showMapLink ? `<button class="secondary" onclick="goToStationOnMap(${stationNum})">\u{1F4CD} Show Station ${stationNum} on the map</button>` : ''}
       <input type="text" id="stationInput" placeholder="${station.prompt}">
       <button onclick="submitStation(${stationNum})">Submit</button>
-      <button class="test" onclick="testFillStation(${stationNum})">Test: fill correct answer</button>
       <div class="msg" id="stationMsg">${priorWrong >= 3 && station.hint ? station.hint : ''}</div>
     </div>`;
   }
@@ -664,40 +659,6 @@ function dismissResult() {
 }
 
 let submitInFlight = false;
-
-function testFillStation(stationNum) {
-  const station = STATIONS.find(s => s.id === stationNum);
-  const dummy = station.validation.type === 'exact' ? station.validation.answer
-    : station.validation.type === 'number' ? '42'
-    : 'test';
-  document.getElementById('stationInput').value = dummy;
-  submitStation(stationNum);
-}
-function testFillUnscramble() {
-  const team = TEAMS.find(t => t.name === currentTeam);
-  document.getElementById('unscrambleInput').value = team.target;
-  submitUnscramble();
-}
-
-async function testFastForwardTeam() {
-  // Completes the whole route in one go, using a single storage write,
-  // rather than one read+write per station. Avoids tripping any rate limit
-  // during quick testing. Not for use during the real event, testing only.
-  const team = TEAMS.find(t => t.name === currentTeam);
-  const progress = { stopIndex: 10, collected: [], solved: true, textResponses: {} };
-  // Rebuild the letters in the exact scrambled order the team would have collected them
-  for (let i = 0; i < 10; i++) {
-    const stationNum = team.route[i];
-    const letter = team.stationLetterMap[stationNum];
-    if (letter) progress.collected.push(letter);
-  }
-  const ok = await saveProgress(currentTeam, progress);
-  currentTeamProgress = progress;
-  const msgEl = document.getElementById('stationMsg') || document.getElementById('unscrambleMsg');
-  if (!ok && msgEl) { msgEl.className = 'msg error'; msgEl.textContent = 'Could not save, try again.'; return; }
-  lastResult = null;
-  await renderTeam();
-}
 
 async function submitStation(stationNum) {
   if (submitInFlight) return;
@@ -846,7 +807,6 @@ async function renderCombine() {
         `</select>`;
     }
     html += `<button onclick="checkWordOrder()">Check word order</button>
-      <button class="test" onclick="testFillWordOrder()">Test: fill correct order</button>
       <div class="msg" id="wordOrderMsg"></div></div>`;
   }
 
@@ -870,7 +830,6 @@ async function renderCombine() {
         `</select>`;
     }
     html += `<button onclick="checkDigitOrder()">Check digit order</button>
-      <button class="test" onclick="testFillDigitOrder()">Test: fill correct order</button>
       <div class="msg" id="digitOrderMsg"></div></div>`;
   }
 
@@ -883,25 +842,6 @@ async function renderCombine() {
   }
 
   container.innerHTML = html;
-}
-
-function testFillWordOrder() {
-  getSettings().then(settings => {
-    for (let i = 0; i < 3; i++) {
-      const sel = document.getElementById('wordSlot' + i);
-      if (sel) sel.value = settings.correctWordOrder[i];
-    }
-    checkWordOrder();
-  });
-}
-function testFillDigitOrder() {
-  getSettings().then(settings => {
-    for (let i = 0; i < 4; i++) {
-      const sel = document.getElementById('digitSlot' + i);
-      if (sel) sel.value = settings.correctDigitOrder[i];
-    }
-    checkDigitOrder();
-  });
 }
 
 async function checkWordOrder() {
